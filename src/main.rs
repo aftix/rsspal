@@ -1,9 +1,8 @@
-use std::env;
-
 use serenity::framework::StandardFramework;
 use serenity::prelude::*;
 
 mod admin_commands;
+mod config;
 mod feed;
 mod signal;
 
@@ -14,19 +13,19 @@ async fn main() {
         eprintln!("SIG_UNNBLOCK sigprocmask errno: {}", errno);
     }
 
-    let feed = feed::RssFeedItem::from_url(
-        "https://www.rssboard.org/files/sample-rss-2.xml",
-        Option::<&str>::None,
-        Option::<&str>::None,
-    );
-    println!("{:?}", feed);
+    let config = match config::Config::new() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error reading config: {}", e);
+            std::process::exit(1);
+        }
+    };
 
     let framework = StandardFramework::new()
         .configure(|c| c.allow_dm(false))
         .group(&admin_commands::ADMIN_GROUP);
-    let token = env::var("DISCORD_TOKEN").expect("need DISCORD_TOKEN environment variable set");
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
-    let mut client = Client::builder(&token, intents)
+    let mut client = Client::builder(&config.discord_token, intents)
         .event_handler(admin_commands::Handler)
         .framework(framework)
         .await

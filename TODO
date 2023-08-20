@@ -1,0 +1,7 @@
+- support Atom as well as RSS
+- put feeds into sqlite3 db
+- update feeds on a regular basis
+- use RSS skip metadata to skip updating some feeds
+- add more commands to bot
+- add startup to bot that configures discord server channels
+- publish new items to discord
