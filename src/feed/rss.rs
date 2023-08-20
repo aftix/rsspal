@@ -46,23 +46,23 @@ pub struct RssChannel {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]
 pub struct RssItem {
-    title: Option<String>,
-    link: String,
-    description: String,
+    pub title: Option<String>,
+    pub link: String,
+    pub description: String,
     #[serde(
         rename = "pubDate",
         with = "rfc822",
         default,
         skip_serializing_if = "Option::is_none"
     )]
-    date: Option<DateTime<Utc>>,
-    author: Option<String>,
+    pub date: Option<DateTime<Utc>>,
+    pub author: Option<String>,
     #[serde(default)]
-    category: Vec<Category>,
-    comments: Option<String>,
-    enclosure: Option<Enclosure>,
-    guid: Option<String>,
-    source: Option<Source>,
+    pub category: Vec<Category>,
+    pub comments: Option<String>,
+    pub enclosure: Option<Enclosure>,
+    pub guid: Option<String>,
+    pub source: Option<Source>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]

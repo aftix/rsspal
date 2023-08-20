@@ -41,14 +41,14 @@ fn get_token() -> anyhow::Result<String> {
 fn get_data_dir() -> PathBuf {
     let xdg_data_dir = env::var("XDG_DATA_HOME");
     if let Ok(dir) = xdg_data_dir {
-        let path = PathBuf::from(dir);
-        return path.join("/rsspal");
+        let path = PathBuf::from(dir).join("rsspal");
+        return path;
     }
 
     let home = env::var("HOME");
     if let Ok(dir) = home {
-        let path = PathBuf::from(dir);
-        return path.join("/rsspal");
+        let path = PathBuf::from(dir).join(".rsspal");
+        return path;
     }
 
     let cwd = env::current_dir().expect("Can not access current directory");
@@ -58,14 +58,14 @@ fn get_data_dir() -> PathBuf {
 pub fn get_config_path() -> PathBuf {
     let xdg_config_dir = env::var("XDG_CONFIG_HOME");
     if let Ok(dir) = xdg_config_dir {
-        let path = PathBuf::from(dir);
-        return path.join("/rsspal");
+        let path = PathBuf::from(dir).join("rsspal");
+        return path;
     }
 
     let home = env::var("HOME");
     if let Ok(dir) = home {
-        let path = PathBuf::from(dir);
-        return path.join("/rsspal");
+        let path = PathBuf::from(dir).join(".rsspal");
+        return path;
     }
 
     let cwd = env::current_dir().expect("Can not access current directory");
@@ -81,17 +81,26 @@ impl Config {
         } else {
             PathBuf::from(args.config)
         };
-        let mut file = File::open(&config_path)?;
+        println!("config path: {:?}", config_path);
 
         let mut buf = Vec::new();
-        if let Ok(metadata) = file.metadata() {
-            buf.reserve(metadata.len() as usize);
-        }
-        file.read_to_end(&mut buf)?;
+        let mut config = if let Ok(mut file) = File::open(&config_path) {
+            if let Ok(metadata) = file.metadata() {
+                buf.reserve(metadata.len() as usize);
+            }
+            file.read_to_end(&mut buf)?;
 
-        let config_str = String::from_utf8_lossy(buf.as_slice());
-        let mut config = toml::from_str::<Config>(&config_str)?;
-        config.config_file = config_path;
+            let config_str = String::from_utf8_lossy(buf.as_slice());
+            let mut config = toml::from_str::<Config>(&config_str)?;
+            config.config_file = config_path;
+            config
+        } else {
+            Config {
+                config_file: config_path.clone(),
+                data_dir: get_data_dir(),
+                discord_token: String::default(),
+            }
+        };
 
         // Now override the loaded file with env vars
         if let Ok(data_dir) = env::var("RSSPAL_DATA_DIR") {

@@ -3,23 +3,20 @@ use serenity::prelude::*;
 
 mod admin_commands;
 mod config;
+mod db;
 mod feed;
 mod signal;
 
 #[tokio::main]
-async fn main() {
-    use crate::signal;
-    if let Err(errno) = signal::mask_signals() {
-        eprintln!("SIG_UNNBLOCK sigprocmask errno: {}", errno);
-    }
+async fn main() -> anyhow::Result<()> {
+    signal::mask_signals().map_err(|e| anyhow::anyhow!("SIG_UNBLOCK sigprocmask errno: {}", e))?;
 
-    let config = match config::Config::new() {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Error reading config: {}", e);
-            std::process::exit(1);
-        }
-    };
+    let config =
+        config::Config::new().map_err(|e| anyhow::anyhow!("error reading config: {}", e))?;
+
+    let db_path = config.data_dir.join("data.db");
+    let pool = db::db_pool(db_path.to_string_lossy()).await?;
+    db::setup_tables(&pool).await?;
 
     let framework = StandardFramework::new()
         .configure(|c| c.allow_dm(false))
@@ -28,10 +25,10 @@ async fn main() {
     let mut client = Client::builder(&config.discord_token, intents)
         .event_handler(admin_commands::Handler)
         .framework(framework)
-        .await
-        .expect("error creating client");
+        .await?;
 
-    if let Err(err) = client.start().await {
-        eprintln!("Error while running client: {:?}", err);
-    }
+    client
+        .start()
+        .await
+        .map_err(|e| anyhow::anyhow!("error running client: {}", e))
 }
