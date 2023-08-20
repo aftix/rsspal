@@ -4,6 +4,7 @@ use serenity::framework::StandardFramework;
 use serenity::prelude::*;
 
 mod admin_commands;
+mod feed;
 mod signal;
 
 #[tokio::main]
@@ -12,6 +13,13 @@ async fn main() {
     if let Err(errno) = signal::mask_signals() {
         eprintln!("SIG_UNNBLOCK sigprocmask errno: {}", errno);
     }
+
+    let feed = feed::RssFeedItem::from_url(
+        "https://www.rssboard.org/files/sample-rss-2.xml",
+        Option::<&str>::None,
+        Option::<&str>::None,
+    );
+    println!("{:?}", feed);
 
     let framework = StandardFramework::new()
         .configure(|c| c.allow_dm(false))

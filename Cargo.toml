@@ -7,6 +7,17 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.75"
+chrono = "0.4.26"
+futures-util = "0.3.28"
 nix = "0.26.2"
+pipe = "0.4.0"
+quick-xml = { version = "0.30.0", features = ["serialize"] }
+reqwest = "0.11.18"
+serde = "1.0.183"
 serenity = "0.11.6"
 tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread", "signal"] }
+tokio-stream = "0.1.14"
+tokio-util = { version = "0.7.8", features = ["io"] }
+toml = "0.7.6"
+typestate = "0.8.0"
