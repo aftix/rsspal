@@ -21,5 +21,4 @@ tokio-stream = "0.1.14"
 tokio-util = { version = "0.7.8", features = ["io"] }
 toml = "0.7.6"
 typestate = "0.8.0"
-sqlx = { version = "0.7", features = ["runtime-tokio", "tls-rustls", "sqlite", "chrono"] }
 clap = { version = "4.3", features = ["derive"] }

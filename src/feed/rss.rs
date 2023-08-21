@@ -22,8 +22,8 @@ pub struct RssFeed {
 pub struct RssChannel {
     pub title: String,
     pub description: String,
-    #[serde(skip)]
-    pub link: (),
+    #[serde(skip, default)]
+    pub link: String,
     pub copyright: Option<String>,
     #[serde(rename = "managingEditor")]
     pub managing_editor: Option<String>,
@@ -218,7 +218,7 @@ mod test {
         let expected_feed = RssFeed {
             channel: RssChannel {
                 title: "NASA Space Station News".to_string(),
-                link: (),
+                link: String::default(),
                 description: "A RSS news feed containing the latest NASA press releases on the International Space Station.".to_string(),
                 pub_date: Some(into_datetime("Tue, 10 Jun 2003 04:00:00 GMT").unwrap()),
                 docs: Some("https://www.rssboard.org/rss-specification".to_owned()),

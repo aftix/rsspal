@@ -3,7 +3,6 @@ use serenity::prelude::*;
 
 mod admin_commands;
 mod config;
-mod db;
 mod feed;
 mod signal;
 
@@ -15,8 +14,6 @@ async fn main() -> anyhow::Result<()> {
         config::Config::new().map_err(|e| anyhow::anyhow!("error reading config: {}", e))?;
 
     let db_path = config.data_dir.join("data.db");
-    let pool = db::db_pool(db_path.to_string_lossy()).await?;
-    db::setup_tables(&pool).await?;
 
     let framework = StandardFramework::new()
         .configure(|c| c.allow_dm(false))
