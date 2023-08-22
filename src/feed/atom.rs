@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader};
 use tokio::runtime::Handle;
 use tokio::task::block_in_place;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
 
 use serde::{Deserialize, Serialize};
 
@@ -29,8 +29,12 @@ pub struct AtomFeed {
     #[serde(default)]
     pub entry: Vec<Entry>,
     pub ttl: Option<usize>,
-    pub skip_days: Option<super::rss::Day>,
-    pub skip_hours: Option<super::rss::Hour>,
+    #[serde(default)]
+    pub skip_days: Vec<super::rss::Day>,
+    #[serde(default)]
+    pub skip_hours: Vec<super::rss::Hour>,
+    #[serde(default)]
+    pub last_updated: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]
@@ -58,6 +62,7 @@ pub struct Entry {
     pub rights: Option<String>,
     pub source: Option<Source>,
     pub summary: Option<String>,
+    pub read: Option<()>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]
@@ -109,6 +114,31 @@ impl AtomFeed {
 
         Ok(feed)
     }
+
+    // Use metadata on channel to figure out if it's time to update
+    pub fn should_update(&self) -> bool {
+        if let Some(last_update) = self.last_updated {
+            let now = chrono::offset::Utc::now();
+            if self.skip_days.contains(&now.date_naive().weekday().into()) {
+                return false;
+            }
+            if self.skip_hours.contains(&now.time().hour().into()) {
+                return false;
+            }
+
+            if let Some(ttl) = self.ttl {
+                let duration_since = now.signed_duration_since(last_update);
+                match Duration::from_std(std::time::Duration::from_secs(ttl as u64 * 60)) {
+                    Ok(ttl) => duration_since >= ttl,
+                    _ => true,
+                }
+            } else {
+                true
+            }
+        } else {
+            true
+        }
+    }
 }
 
 #[cfg(test)]
@@ -151,11 +181,6 @@ mod test {
                 href: "http://example.org/".to_owned(),
                 rel: String::default(),
             }),
-            category: vec![],
-            icon: None,
-            logo: None,
-            rights: None,
-            subtitle: None,
             entry: vec![Entry {
                 id: "urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a".to_owned(),
                 title: "Atom-Powered Robots Run Amok".to_owned(),
@@ -163,15 +188,9 @@ mod test {
                     .unwrap()
                     .into(),
                 summary: Some("Some text.".to_owned()),
-                author: None,
-                contributer: None,
-                published: None,
-                rights: None,
-                source: None,
+                ..Default::default()
             }],
-            ttl: None,
-            skip_days: None,
-            skip_hours: None,
+            ..Default::default()
         };
         assert_eq!(expected_feed, feed);
     }

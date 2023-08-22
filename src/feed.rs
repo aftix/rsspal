@@ -1,12 +1,40 @@
+use chrono::{DateTime, Utc};
+use std::path::PathBuf;
+
 use typestate::typestate;
 
 use serde::{Deserialize, Serialize};
+
+use tokio::fs::{try_exists, File};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub mod atom;
 pub mod rss;
 
 use atom::AtomFeed;
 use rss::RssFeed;
+
+pub async fn import(data_dir: &PathBuf) -> anyhow::Result<Vec<Feed>> {
+    let db_path = data_dir.join("database.toml");
+    if !try_exists(&db_path).await? {
+        return Ok(Vec::new());
+    }
+
+    let mut file = File::open(&db_path).await?;
+    let mut s = String::new();
+    file.read_to_string(&mut s).await?;
+
+    Ok(toml::from_str(&s)?)
+}
+
+pub async fn export(data_dir: &PathBuf, feeds: &Vec<Feed>) -> anyhow::Result<()> {
+    let db_path = data_dir.join("database.toml");
+    let out_str = toml::to_string(feeds)?;
+
+    let mut file = File::create(&db_path).await?;
+    file.write_all(out_str.as_bytes()).await?;
+    Ok(())
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub enum Feed {
@@ -26,6 +54,20 @@ impl Feed {
         match self {
             Self::RSS(rss) => rss.channel.title.clone(),
             Self::ATOM(atom) => atom.title.clone(),
+        }
+    }
+
+    pub fn last_updated(&self) -> Option<DateTime<Utc>> {
+        match self {
+            Self::RSS(rss) => rss.channel.last_updated.clone(),
+            Self::ATOM(atom) => atom.last_updated.clone(),
+        }
+    }
+
+    pub fn should_update(&self) -> bool {
+        match self {
+            Self::RSS(rss) => rss.should_update(),
+            Self::ATOM(atom) => atom.should_update(),
         }
     }
 }

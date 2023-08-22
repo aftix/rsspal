@@ -21,6 +21,10 @@ struct Args {
     // Location of the data directory
     #[arg(short, long, default_value_t = String::default())]
     data_dir: String,
+
+    // Interval inbetween updates in seconds
+    #[arg(short, long)]
+    interval: Option<u64>,
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
@@ -31,6 +35,8 @@ pub struct Config {
     pub data_dir: PathBuf,
     #[serde(skip, default)]
     pub discord_token: String,
+    // time to wait in seconds between updates
+    pub interval: u64,
 }
 
 fn get_token() -> anyhow::Result<String> {
@@ -99,6 +105,7 @@ impl Config {
                 config_file: config_path.clone(),
                 data_dir: get_data_dir(),
                 discord_token: String::default(),
+                interval: 600,
             }
         };
 
@@ -112,6 +119,10 @@ impl Config {
         // Now override the config with the cmd line arguments
         if args.data_dir != "" {
             config.data_dir = PathBuf::from(args.data_dir);
+        }
+
+        if let Some(i) = args.interval {
+            config.interval = i;
         }
 
         if args.token != "" {

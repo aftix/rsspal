@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader};
 use tokio::runtime::Handle;
 use tokio::task::block_in_place;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Duration, Timelike, Utc, Weekday};
 
 use serde::{Deserialize, Serialize};
 
@@ -42,6 +42,7 @@ pub struct RssChannel {
     pub skip_days: Vec<Day>,
     #[serde(default)]
     pub item: Vec<RssItem>,
+    pub last_updated: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]
@@ -63,6 +64,7 @@ pub struct RssItem {
     pub enclosure: Option<Enclosure>,
     pub guid: Option<String>,
     pub source: Option<Source>,
+    pub read: Option<()>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]
@@ -77,6 +79,14 @@ pub struct Category {
 pub struct Hour {
     #[serde(rename = "$text")]
     hour: u8,
+}
+
+impl From<u32> for Hour {
+    fn from(u: u32) -> Self {
+        Self {
+            hour: (u % 24) as u8,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]
@@ -95,6 +105,26 @@ pub enum DaysOfWeek {
     Friday,
     Saturday,
     Sunday,
+}
+
+impl From<Weekday> for Day {
+    fn from(day: Weekday) -> Self {
+        Self { day: day.into() }
+    }
+}
+
+impl From<Weekday> for DaysOfWeek {
+    fn from(day: Weekday) -> Self {
+        match day {
+            Weekday::Mon => DaysOfWeek::Monday,
+            Weekday::Tue => DaysOfWeek::Tuesday,
+            Weekday::Wed => DaysOfWeek::Wednesday,
+            Weekday::Thu => DaysOfWeek::Thursday,
+            Weekday::Fri => DaysOfWeek::Friday,
+            Weekday::Sat => DaysOfWeek::Saturday,
+            Weekday::Sun => DaysOfWeek::Sunday,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]
@@ -183,6 +213,35 @@ impl RssFeed {
         }?;
 
         Ok(feed)
+    }
+
+    // Use metadata on channel to figure out if it's time to update
+    pub fn should_update(&self) -> bool {
+        if let Some(last_update) = self.channel.last_updated {
+            let now = chrono::offset::Utc::now();
+            if self
+                .channel
+                .skip_days
+                .contains(&now.date_naive().weekday().into())
+            {
+                return false;
+            }
+            if self.channel.skip_hours.contains(&now.time().hour().into()) {
+                return false;
+            }
+
+            if let Some(ttl) = self.channel.ttl {
+                let duration_since = now.signed_duration_since(last_update);
+                match Duration::from_std(std::time::Duration::from_secs(ttl as u64 * 60)) {
+                    Ok(ttl) => duration_since >= ttl,
+                    _ => true,
+                }
+            } else {
+                true
+            }
+        } else {
+            true
+        }
     }
 }
 
