@@ -2,8 +2,6 @@ use std::sync::Arc;
 
 use log::{debug, error, info};
 
-use tokio::fs::File;
-use tokio::io::AsyncReadExt;
 use tokio::sync::Barrier;
 use tokio::task::spawn;
 
@@ -15,7 +13,7 @@ use serenity::framework::standard::{
 use serenity::model::{channel::Message, gateway::Ready};
 use serenity::prelude::*;
 
-use crate::feed::{self, Feed};
+use crate::feed;
 use crate::signal::{send_termination, wait_for_termination};
 use crate::update::{background_task, Command, COMMANDS};
 use crate::CONFIG;
@@ -37,9 +35,7 @@ impl EventHandler for Handler {
             .expect("couldn't read config global")
             .data_dir
             .clone();
-        let feeds = feed::import(&data_dir)
-            .await
-            .expect("Failed to import feeds.");
+        let feeds = feed::import().await.expect("Failed to import feeds.");
 
         debug!("spawning background task");
         spawn(background_task(feeds, ctx.clone()));

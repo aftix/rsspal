@@ -2,6 +2,7 @@ use serenity::framework::StandardFramework;
 use serenity::prelude::*;
 use std::sync::OnceLock;
 
+#[cfg(not(debug_assertions))]
 use log::LevelFilter;
 
 #[cfg(debug_assertions)]

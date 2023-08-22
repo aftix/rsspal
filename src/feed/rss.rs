@@ -45,6 +45,7 @@ pub struct RssChannel {
     #[serde(default)]
     pub item: Vec<RssItem>,
     pub last_updated: Option<DateTime<Utc>>,
+    pub discord_category: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]

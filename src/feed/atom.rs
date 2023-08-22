@@ -37,6 +37,9 @@ pub struct AtomFeed {
     pub skip_hours: Vec<super::rss::Hour>,
     #[serde(default)]
     pub last_updated: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub url: String,
+    pub discord_category: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]
@@ -96,9 +99,10 @@ impl AtomFeed {
     pub fn from_url(url: impl AsRef<str>) -> anyhow::Result<Self> {
         info!("Reading atom feed from {}", url.as_ref());
         let url: Url = Url::parse(url.as_ref())?;
+        let feed_url = url.to_string();
 
         // Stream rss feed to the write end of the pipe in a new task
-        let feed = if url.scheme() == "http" || url.scheme() == "https" {
+        let mut feed = if url.scheme() == "http" || url.scheme() == "https" {
             debug!("Making network request for {}.", url);
             let bytes = {
                 let url = url.clone();
@@ -110,13 +114,12 @@ impl AtomFeed {
             xml_from_reader(url, BufReader::new(bytes.as_ref()))
         } else if url.scheme() == "file" {
             debug!("Reading {} from disk.", url);
-            let path = url.path();
-            let file = File::open(path)?;
-            xml_from_reader(url, BufReader::new(file))
+            xml_from_reader(&feed_url, BufReader::new(File::open(url.path())?))
         } else {
             anyhow::bail!("{}: unsupported url schema", url)
         }?;
 
+        feed.url = feed_url;
         Ok(feed)
     }
 

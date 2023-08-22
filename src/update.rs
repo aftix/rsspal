@@ -1,12 +1,12 @@
+use std::collections::HashSet;
 use std::sync::{Arc, OnceLock};
 
 use log::{debug, error, info};
 
 use serenity::prelude::*;
 
-use tokio::fs::{create_dir_all, File};
-use tokio::io::AsyncWriteExt;
 use tokio::sync::{mpsc, Barrier};
+use tokio::task::JoinSet;
 use tokio::time::{sleep_until, Duration, Instant};
 
 use crate::feed::{self, Feed};
@@ -65,23 +65,105 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
     Ok(())
 }
 
-async fn update_feeds(feeds: &mut [Feed], ctx: &Context) {
-    info!("Updating feeds")
+async fn diff_feed(update: Feed, feeds: &mut [Feed], ctx: &Context) {
+    let feed = feeds.iter_mut().find(|f| f.url() == update.url());
+    if let Some(feed) = feed {
+        info!("Updating feed {}.", feed.title());
+        match (update, feed) {
+            (Feed::RSS(update), Feed::RSS(ref mut rss)) => {
+                debug!("Feed {} is RSS.", rss.channel.title);
+                debug!("Updating feed {} items.", rss.channel.title);
+                let mut set = HashSet::with_capacity(rss.channel.item.len());
+                set.extend(rss.channel.item.iter().map(|i| i.link.clone()));
+                for item in update.channel.item {
+                    if !set.contains(&item.link) {
+                        info!("Feed {} new item: {:?}.", rss.channel.title, item.title);
+                        rss.channel.item.push(item);
+                    }
+                }
+
+                debug!("Updating feed {} metadata.", rss.channel.title);
+                rss.channel.description = update.channel.description;
+                rss.channel.copyright = update.channel.copyright;
+                rss.channel.managing_editor = update.channel.managing_editor;
+                rss.channel.web_master = update.channel.web_master;
+                rss.channel.pub_date = update.channel.pub_date;
+                rss.channel.category = update.channel.category;
+                rss.channel.docs = update.channel.docs;
+                rss.channel.ttl = update.channel.ttl;
+                rss.channel.image = update.channel.image;
+                rss.channel.skip_hours = update.channel.skip_hours;
+                rss.channel.skip_days = update.channel.skip_days;
+                rss.channel.last_updated = Some(chrono::offset::Utc::now());
+            }
+            (Feed::ATOM(update), Feed::ATOM(ref mut atom)) => {
+                debug!("Feed {} is atom.", atom.title);
+                debug!("Updating feed {} items.", atom.title);
+                let mut set = HashSet::with_capacity(atom.entry.len());
+                set.extend(atom.entry.iter().map(|e| e.id.clone()));
+                for entry in update.entry {
+                    if !set.contains(&entry.id) {
+                        info!("Feed {} hew item: {}.", atom.title, entry.title);
+                        atom.entry.push(entry);
+                    }
+                }
+
+                debug!("Updating feed {} metadata", atom.title);
+                atom.id = update.id;
+                atom.updated = update.updated;
+                atom.author = update.author;
+                atom.link = update.link;
+                atom.category = update.category;
+                atom.icon = update.icon;
+                atom.logo = update.logo;
+                atom.rights = update.rights;
+                atom.subtitle = update.subtitle;
+                atom.ttl = update.ttl;
+                atom.skip_days = update.skip_days;
+                atom.skip_hours = update.skip_hours;
+                atom.last_updated = Some(chrono::offset::Utc::now());
+            }
+            _ => error!("Mismatched feed type between update and current feed",),
+        }
+    }
+}
+
+async fn update_feeds(feeds: &mut Vec<Feed>, ctx: &Context) {
+    info!("Updating feeds");
+    let mut futures = JoinSet::new();
+    for feed in feeds.iter_mut() {
+        if feed.should_update() {
+            let url = feed.url();
+            futures.spawn(async {
+                info!("Updating feed at {}.", url);
+                feed::from_url(url, None, None)
+            });
+        }
+    }
+
+    while let Some(res) = futures.join_next().await {
+        match res {
+            Err(e) => error!("Error joining update feed task: {}", e),
+            Ok(Err(e)) => error!("Error updating feed: {}", e),
+            Ok(Ok(update)) => diff_feed(update, feeds, ctx).await,
+        };
+    }
+
+    if let Err(e) = feed::export(feeds).await {
+        error!("Error writing feeds to file: {}", e);
+    }
 }
 
 async fn exit_feeds_loop(feeds: Vec<Feed>) -> anyhow::Result<()> {
     debug!("Exiting the background loop");
-    let path = {
+    {
         let config = CONFIG
             .get()
             .ok_or_else(|| anyhow::anyhow!("could not get CONFIG"))?;
-
         config.save()?;
+    }
 
-        config.data_dir.clone()
-    };
-
-    feed::export(&path, &feeds)
+    feed::export(&feeds)
         .await
         .map_err(|e| anyhow::anyhow!("could not save feeds data: {}", e))
 }
