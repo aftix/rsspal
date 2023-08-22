@@ -1,5 +1,7 @@
 use std::sync::{Arc, OnceLock};
 
+use log::{debug, error, info};
+
 use serenity::prelude::*;
 
 use tokio::fs::{create_dir_all, File};
@@ -7,7 +9,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::{mpsc, Barrier};
 use tokio::time::{sleep_until, Duration, Instant};
 
-use crate::feed::Feed;
+use crate::feed::{self, Feed};
 use crate::CONFIG;
 
 pub static COMMANDS: OnceLock<mpsc::Sender<(Command, Arc<Barrier>)>> = OnceLock::new();
@@ -32,6 +34,7 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
         .checked_add(interval)
         .expect("couldn't add interval to instant");
 
+    debug!("Starting background loop");
     'L: loop {
         let recv = commands.recv();
         let timer = sleep_until(to_sleep);
@@ -42,7 +45,10 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                 match command {
                     Command::AddFeed(feed) => feeds.push(feed),
                     Command::Exit => {
-                        exit_feeds_loop(feeds).await?;
+                        if let Err(e) = exit_feeds_loop(feeds).await {
+                            error!("Error exiting background_task: {}", e);
+                        }
+                        wait.wait().await;
                         break 'L;
                     }
                 }
@@ -59,21 +65,23 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
     Ok(())
 }
 
-async fn update_feeds(feeds: &mut [Feed], ctx: &Context) {}
+async fn update_feeds(feeds: &mut [Feed], ctx: &Context) {
+    info!("Updating feeds")
+}
 
 async fn exit_feeds_loop(feeds: Vec<Feed>) -> anyhow::Result<()> {
-    let data = toml::to_string(&feeds)?;
+    debug!("Exiting the background loop");
     let path = {
         let config = CONFIG
             .get()
             .ok_or_else(|| anyhow::anyhow!("could not get CONFIG"))?;
 
-        config.data_dir.join("database.toml")
-    };
-    create_dir_all(path.parent().unwrap()).await?;
-    let mut file = File::create(path).await?;
+        config.save()?;
 
-    file.write_all(data.as_bytes())
+        config.data_dir.clone()
+    };
+
+    feed::export(&path, &feeds)
         .await
-        .map_err(|e| anyhow::anyhow!("error writing data to file: {}", e))
+        .map_err(|e| anyhow::anyhow!("could not save feeds data: {}", e))
 }

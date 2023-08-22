@@ -1,6 +1,8 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
+use log::{debug, info};
+
 use tokio::runtime::Handle;
 use tokio::task::block_in_place;
 
@@ -192,10 +194,12 @@ impl RssFeed {
     // Filling the title and category fields if given
     // (title defaults to title from rss feed)
     pub fn from_url(url: impl AsRef<str>) -> anyhow::Result<Self> {
+        info!("Loading rss feed from {}.", url.as_ref());
         let url: Url = Url::parse(url.as_ref())?;
 
         // Stream rss feed to the write end of the pipe in a new task
         let feed = if url.scheme() == "http" || url.scheme() == "https" {
+            debug!("Making network request for {}.", url);
             let bytes = {
                 let url = url.clone();
                 block_in_place(move || {
@@ -205,6 +209,7 @@ impl RssFeed {
             }?;
             xml_from_reader(url, BufReader::new(bytes.as_ref()))
         } else if url.scheme() == "file" {
+            debug!("Reading {} from disk.", url);
             let path = url.path();
             let file = File::open(path)?;
             xml_from_reader(url, BufReader::new(file))
@@ -224,13 +229,19 @@ impl RssFeed {
                 .skip_days
                 .contains(&now.date_naive().weekday().into())
             {
+                debug!("Feed {} should be skipped today.", self.channel.title);
                 return false;
             }
             if self.channel.skip_hours.contains(&now.time().hour().into()) {
+                debug!("Feed {} should be skipped this hour.", self.channel.title);
                 return false;
             }
 
             if let Some(ttl) = self.channel.ttl {
+                debug!(
+                    "Checking ttl to see if {} should be updated now.",
+                    self.channel.title
+                );
                 let duration_since = now.signed_duration_since(last_update);
                 match Duration::from_std(std::time::Duration::from_secs(ttl as u64 * 60)) {
                     Ok(ttl) => duration_since >= ttl,

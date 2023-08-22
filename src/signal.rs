@@ -1,6 +1,8 @@
 use std::future::Future;
 use std::sync::OnceLock;
 
+use log::{debug, error, info};
+
 use nix::errno::Errno;
 use nix::sys::signal::{
     sigprocmask, SigSet,
@@ -10,7 +12,7 @@ use nix::sys::signal::{
 
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::mpsc::{self, error::SendError};
-use tokio::time::{sleep_until, Duration, Instant};
+use tokio::time::{sleep, Duration};
 
 static EXIT_SENDER: OnceLock<mpsc::Sender<()>> = OnceLock::new();
 
@@ -22,16 +24,18 @@ fn sigset() -> SigSet {
 }
 
 pub fn mask_signals() -> Result<(), Errno> {
+    info!("Blocking OS termination signals.");
     sigprocmask(SIG_BLOCK, Some(&sigset()), None)
 }
 
 pub fn unmask_signals() -> Result<(), Errno> {
+    info!("Unblocking OS termination signals.");
     sigprocmask(SIG_UNBLOCK, Some(&sigset()), None)
 }
 
 pub async fn wait_for_termination(exit: impl Future<Output = ()>) {
     if let Err(errno) = unmask_signals() {
-        eprintln!("SIG_UNBLOCK sigprocmask errno: {}", errno);
+        error!("SIG_UNBLOCK sigprocmask errno: {}", errno);
     }
 
     let sigint = signal(SignalKind::interrupt());
@@ -40,27 +44,25 @@ pub async fn wait_for_termination(exit: impl Future<Output = ()>) {
         let (send, mut recv) = mpsc::channel(1);
         EXIT_SENDER.set(send).expect("setting EXIT_SENDER failed");
 
+        debug!("Blocking select statement on all termination signals.");
         tokio::select! {
             _ = sigint.recv() => exit.await,
             _ = sigterm.recv() => exit.await,
             _ = recv.recv() => exit.await,
         }
 
-        let now = Instant::now();
-        let duration = Duration::from_secs(1);
-        sleep_until(
-            now.checked_add(duration)
-                .expect("could not add 1 second to current instant"),
-        )
-        .await;
+        sleep(Duration::from_secs(1)).await;
+        info!("Exiting process.");
         std::process::exit(0);
     }
 }
 
 pub async fn send_termination() -> Result<(), SendError<()>> {
+    debug!("Sending termination message on channel.");
     if let Some(send) = EXIT_SENDER.get() {
         send.send(()).await
     } else {
+        error!("Failed to send termination singnal.");
         Err(SendError(()))
     }
 }

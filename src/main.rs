@@ -2,6 +2,13 @@ use serenity::framework::StandardFramework;
 use serenity::prelude::*;
 use std::sync::OnceLock;
 
+use log::LevelFilter;
+
+#[cfg(debug_assertions)]
+use pretty_env_logger;
+#[cfg(not(debug_assertions))]
+use systemd_journal_logger::JournalLog;
+
 mod admin_commands;
 mod config;
 mod discord;
@@ -15,6 +22,16 @@ static CONFIG: OnceLock<config::Config> = OnceLock::new();
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     signal::mask_signals().map_err(|e| anyhow::anyhow!("SIG_UNBLOCK sigprocmask errno: {}", e))?;
+
+    #[cfg(debug_assertions)]
+    {
+        pretty_env_logger::init();
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        JournalLog::default().install().unwrap();
+        log::set_max_level(LevelFilter::Info);
+    }
 
     let config =
         config::Config::new().map_err(|e| anyhow::anyhow!("error reading config: {}", e))?;

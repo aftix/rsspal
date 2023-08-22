@@ -5,6 +5,8 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use log::{debug, info};
+
 use clap::Parser;
 
 #[derive(Clone, PartialEq, Eq, Hash, Parser)]
@@ -87,7 +89,7 @@ impl Config {
         } else {
             PathBuf::from(args.config)
         };
-        println!("config path: {:?}", config_path);
+        debug!("config path: {:?}", config_path);
 
         let mut buf = Vec::new();
         let mut config = if let Ok(mut file) = File::open(&config_path) {
@@ -137,6 +139,7 @@ impl Config {
     }
 
     pub fn save(&self) -> anyhow::Result<()> {
+        info!("Saving configuration file to {:?}", self.config_file);
         let out_str = toml::to_string_pretty(self)?;
         let mut file = File::create(&self.config_file)?;
         file.write_all(out_str.as_bytes())?;

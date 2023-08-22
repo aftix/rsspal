@@ -1,12 +1,14 @@
 use chrono::{DateTime, Utc};
+use std::fs::File;
 use std::path::PathBuf;
+
+use log::{debug, info, warn};
 
 use typestate::typestate;
 
 use serde::{Deserialize, Serialize};
 
-use tokio::fs::{try_exists, File};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::fs::try_exists;
 
 pub mod atom;
 pub mod rss;
@@ -15,24 +17,23 @@ use atom::AtomFeed;
 use rss::RssFeed;
 
 pub async fn import(data_dir: &PathBuf) -> anyhow::Result<Vec<Feed>> {
-    let db_path = data_dir.join("database.toml");
+    let db_path = data_dir.join("database.json");
+    info!("Loading database from {:?}", db_path);
     if !try_exists(&db_path).await? {
+        warn!("{:?} does not exist, using an empty feed vector.", db_path);
         return Ok(Vec::new());
     }
 
-    let mut file = File::open(&db_path).await?;
-    let mut s = String::new();
-    file.read_to_string(&mut s).await?;
-
-    Ok(toml::from_str(&s)?)
+    let mut file = File::open(&db_path)?;
+    serde_json::from_reader(file).map_err(|e| anyhow::anyhow!("error reading JSON: {}", e))
 }
 
 pub async fn export(data_dir: &PathBuf, feeds: &Vec<Feed>) -> anyhow::Result<()> {
-    let db_path = data_dir.join("database.toml");
-    let out_str = toml::to_string(feeds)?;
+    let db_path = data_dir.join("database.json");
 
-    let mut file = File::create(&db_path).await?;
-    file.write_all(out_str.as_bytes()).await?;
+    info!("Writing database to {:?}", db_path);
+    let file = File::create(&db_path)?;
+    serde_json::to_writer_pretty(file, feeds)?;
     Ok(())
 }
 
@@ -379,6 +380,7 @@ impl FeedItem {
         title: Option<impl AsRef<str>>,
         category: Option<impl AsRef<str>>,
     ) -> anyhow::Result<Self> {
+        info!("Retrieving feed from url {}", url.as_ref());
         let builder = Self::builder().url(url.as_ref());
 
         let feed = match AtomFeed::from_url(&url) {
@@ -387,11 +389,13 @@ impl FeedItem {
         }?;
 
         let builder = if let Some(t) = title {
+            debug!("Setting override title");
             builder.title(t.as_ref())
         } else {
             builder.title(feed.title())
         };
         let builder = if let Some(c) = category {
+            debug!("Setting category");
             builder.category(c.as_ref())
         } else {
             builder
