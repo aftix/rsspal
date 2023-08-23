@@ -4,6 +4,7 @@ use regex::{Regex, RegexSet};
 
 use log::{debug, error, info, warn};
 
+use serenity::builder::CreateEmbed;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 
@@ -26,7 +27,63 @@ pub fn title_to_channel_name(s: impl AsRef<str>) -> String {
     let s = SPACE_REGEX.replace_all(s.as_ref(), "-");
     let s = SPECIAL_REGEX.replace_all(&s, "");
     let s = SPECIAL_REGEX.replace_all(&s, "");
-    s.to_string()
+    s[..95].to_string()
+}
+
+async fn mark(
+    msg: Message,
+    ctx: &Context,
+    channel_name: impl FnOnce(&str) -> String,
+    emoji: char,
+) -> anyhow::Result<()> {
+    if msg.embeds.len() != 1 {
+        anyhow::bail!("Message {} does not appear to be a feed item.", msg.id);
+    }
+
+    let channel = msg
+        .channel(&ctx)
+        .await?
+        .guild()
+        .ok_or_else(|| anyhow::anyhow!("message {} is not in guild channel", msg.id))?;
+    let channel_name = channel_name(channel.name());
+    let embed: CreateEmbed = msg.embeds[0].clone().into();
+    msg.delete(&ctx).await?;
+
+    let channels = ctx.http.get_channels(channel.guild_id.0).await?;
+    let new_channel = channels
+        .iter()
+        .find(|ch| ch.name == channel_name)
+        .ok_or_else(|| anyhow::anyhow!("thread for read items not found ({})", channel_name))?;
+
+    let new_msg = new_channel
+        .send_message(&ctx, |msg| {
+            msg.add_embed(|e| {
+                e.clone_from(&embed);
+                e
+            })
+        })
+        .await?;
+    new_msg.react(&ctx, emoji).await?;
+
+    Ok(())
+}
+
+pub async fn mark_read(msg: Message, ctx: &Context) -> anyhow::Result<()> {
+    mark(msg, ctx, |name| format!("read-{}", &name[..95]), '📕').await
+}
+
+pub async fn mark_unread(msg: Message, ctx: &Context) -> anyhow::Result<()> {
+    mark(
+        msg,
+        ctx,
+        |name| {
+            name.strip_prefix("read-")
+                .map(String::from)
+                .unwrap_or_else(|| name.to_string())
+        },
+        '📖',
+    )
+    .await
 }
 
 pub async fn publish_atom_entry(
@@ -35,11 +92,15 @@ pub async fn publish_atom_entry(
     ctx: &Context,
 ) -> anyhow::Result<()> {
     info!("Publishing item {} to feed {}", entry.title, feed_name);
-    let channel_name = title_to_channel_name(feed_name);
+    let channel_name = if entry.read.is_some() {
+        title_to_channel_name(feed_name)
+    } else {
+        format!("read-{}", &title_to_channel_name(feed_name)[..95])
+    };
 
     let guilds = {
         if let Some(g) = GUILDS.get() {
-            g
+            g.clone()
         } else {
             error!("Could not get GUILDS static variable.");
             anyhow::bail!("could not access GUILDS static variable");
@@ -65,7 +126,8 @@ pub async fn publish_atom_entry(
             let msg = channel
                 .send_message(ctx, |msg| msg.embed(&embed_cb))
                 .await?;
-            if let Err(e) = msg.react(ctx, '📖').await {
+            let emoji = if entry.read.is_some() { '📕' } else { '📖' };
+            if let Err(e) = msg.react(ctx, emoji).await {
                 warn!("Unable to react to message for {}: {}", entry.title, e);
             }
         }
@@ -80,11 +142,15 @@ pub async fn publish_rss_item(
     ctx: &Context,
 ) -> anyhow::Result<()> {
     info!("Publishing item {} to feed {}", item.link, feed_name);
-    let channel_name = title_to_channel_name(feed_name);
+    let channel_name = if item.read.is_some() {
+        title_to_channel_name(feed_name)
+    } else {
+        format!("read-{}", &title_to_channel_name(feed_name)[..95])
+    };
 
     let guilds = {
         if let Some(g) = GUILDS.get() {
-            g
+            g.clone()
         } else {
             error!("Could not get GUILDS static variable.");
             anyhow::bail!("could not access GUILDS static variable");
@@ -110,7 +176,8 @@ pub async fn publish_rss_item(
             let msg = channel
                 .send_message(ctx, |msg| msg.embed(&embed_cb))
                 .await?;
-            if let Err(e) = msg.react(ctx, '📖').await {
+            let emoji = if item.read.is_some() { '📕' } else { '📖' };
+            if let Err(e) = msg.react(ctx, emoji).await {
                 warn!("Unable to react to message for {}: {}", item.link, e);
             }
         }
@@ -123,7 +190,7 @@ pub async fn setup_channels(feeds: &[Feed], ctx: &Context) {
     info!("Setting up discord servers to fit read roles.");
     let guilds = {
         if let Some(g) = GUILDS.get() {
-            g
+            g.clone()
         } else {
             error!("Could not get GUILDS static variable.");
             return;

@@ -18,6 +18,8 @@ pub static COMMANDS: OnceLock<mpsc::Sender<(Command, Arc<Barrier>)>> = OnceLock:
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub enum Command {
     AddFeed(Feed),
+    MarkRead(String, String),   // Channel name, item url
+    MarkUnread(String, String), // Channel name, item url
     Exit,
 }
 
@@ -45,6 +47,70 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                     .ok_or_else(|| anyhow::anyhow!("failed recieveing on channel"))?;
                 match command {
                     Command::AddFeed(feed) => feeds.push(feed),
+                    Command::MarkRead(name, link) => {
+                        let save = match feeds.iter_mut().find(|feed| {
+                            let channel_title = crate::discord::title_to_channel_name(feed.title());
+                            let read_title = format!("read-{}", &channel_title[..95]);
+                            channel_title == name || read_title == name
+                        }) {
+                            None => {
+                                warn!("No feed found for MarkRead with name {}.", name);
+                                None
+                            },
+                            Some(feed) =>
+                                match feed {
+                                Feed::RSS(rss) => rss.channel.item.iter_mut().find(|item| item.link == link).and_then(|item| {
+                                    item.read = Some(());
+                                    Some(())
+                                }).or_else(|| {
+                                    error!("Could not find rss item with link {}.", link);
+                                    None
+                                }),
+                                Feed::ATOM(atom) => atom.entry.iter_mut().find(|entry| entry.get_link_href() == link).and_then(|entry| {entry.read = Some(()); Some(())}).or_else(|| {
+                                    error!("Could not find atom entry with link {}.", link);
+                                    None
+                                }),
+                            },
+                        };
+
+                        if save.is_some() {
+                            if let Err(e) = crate::feed::export(&feeds).await {
+                                error!("Erorr saving feeds: {}.", e);
+                            }
+                        }
+                    },
+                    Command::MarkUnread(name, link) => {
+                        let save = match feeds.iter_mut().find(|feed| {
+                            let channel_title = crate::discord::title_to_channel_name(feed.title());
+                            let read_title = format!("read-{}", &channel_title[..95]);
+                            channel_title == name || read_title == name
+                        }) {
+                            None => {
+                                warn!("No feed found for MarkUnread with name {}.", name);
+                                None
+                            },
+                            Some(feed) =>
+                                match feed {
+                                Feed::RSS(rss) => rss.channel.item.iter_mut().find(|item| item.link == link).and_then(|item| {
+                                    item.read = None;
+                                    Some(())
+                                }).or_else(|| {
+                                    error!("Could not find rss item with link {}.", link);
+                                    None
+                                }),
+                                Feed::ATOM(atom) => atom.entry.iter_mut().find(|entry| entry.get_link_href() == link).and_then(|entry| {entry.read = Some(()); Some(())}).or_else(|| {
+                                    error!("Could not find atom entry with link {}.", link);
+                                    None
+                                }),
+                            },
+                        };
+
+                        if save.is_some() {
+                            if let Err(e) = crate::feed::export(&feeds).await {
+                                error!("Erorr saving feeds: {}.", e);
+                            }
+                        }
+                    },
                     Command::Exit => {
                         if let Err(e) = exit_feeds_loop(feeds).await {
                             error!("Error exiting background_task: {}", e);
