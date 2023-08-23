@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use log::{debug, error, info};
 
@@ -10,13 +10,16 @@ use serenity::framework::standard::{
     macros::{command, group},
     CommandError, CommandResult,
 };
+use serenity::model::id::GuildId;
 use serenity::model::{channel::Message, gateway::Ready};
 use serenity::prelude::*;
 
+use crate::discord;
 use crate::feed;
 use crate::signal::{send_termination, wait_for_termination};
 use crate::update::{background_task, Command, COMMANDS};
-use crate::CONFIG;
+
+pub static GUILDS: OnceLock<Vec<GuildId>> = OnceLock::new();
 
 #[group]
 #[commands(ping, exit)]
@@ -29,13 +32,15 @@ impl EventHandler for Handler {
     // Real main function since everything needs access to the context
     async fn ready(&self, ctx: Context, ready: Ready) {
         debug!("serenity discord client is ready");
+        let ids: Vec<_> = ready.guilds.iter().map(|guild| guild.id).collect();
+        GUILDS
+            .set(ids)
+            .expect("failed to set guild ids static variable");
+
         // Get the stored database
-        let data_dir = CONFIG
-            .get()
-            .expect("couldn't read config global")
-            .data_dir
-            .clone();
         let feeds = feed::import().await.expect("Failed to import feeds.");
+
+        discord::setup_channels(&feeds, &ctx).await;
 
         debug!("spawning background task");
         spawn(background_task(feeds, ctx.clone()));
