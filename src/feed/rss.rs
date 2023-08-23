@@ -3,6 +3,8 @@ use std::io::{BufRead, BufReader};
 
 use log::{debug, info};
 
+use serenity::builder::CreateEmbed;
+
 use tokio::runtime::Handle;
 use tokio::task::block_in_place;
 
@@ -70,6 +72,55 @@ pub struct RssItem {
     pub read: Option<()>,
 }
 
+impl RssItem {
+    pub fn to_embed(&self) -> impl Fn(&mut CreateEmbed) -> &mut CreateEmbed {
+        let author = self.author.clone();
+        let description = self.description.clone();
+        let title = self.title.clone();
+        let enclosure = self.enclosure.clone();
+        let date = self.date.clone();
+        let link = self.link.clone();
+        let comments = self.comments.clone();
+        let source = self.source.clone();
+
+        move |embed: &mut CreateEmbed| {
+            if let Some(ref a) = author {
+                embed.author(|author| author.name(a));
+            }
+
+            if let Some(ref enc) = enclosure {
+                if super::is_image_mime_type(&enc.content_type) {
+                    embed.image(&enc.url);
+                }
+            }
+
+            if let Some(ref t) = title {
+                embed.title(t);
+            } else {
+                embed.title("(Untitled)");
+            }
+
+            if let Some(d) = date {
+                embed.timestamp(d);
+            }
+
+            embed.description(&description);
+            embed.field("link", &link, false);
+
+            if let Some(ref c) = comments {
+                embed.field("comments", c, true);
+            }
+
+            if let Some(ref s) = source {
+                embed.field("source", &s.source, true);
+                embed.field("source url", &s.url, true);
+            }
+
+            embed
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]
 pub struct Category {
     #[serde(rename = "@domain")]
@@ -133,11 +184,11 @@ impl From<Weekday> for DaysOfWeek {
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]
 pub struct Enclosure {
     #[serde(rename = "@url")]
-    url: String,
+    pub url: String,
     #[serde(rename = "@length")]
-    length: u64,
+    pub length: u64,
     #[serde(rename = "@type")]
-    content_type: String,
+    pub content_type: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]

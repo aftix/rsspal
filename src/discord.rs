@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use regex::{Regex, RegexSet};
 
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 
 use serenity::model::prelude::*;
 use serenity::prelude::*;
@@ -10,6 +10,8 @@ use serenity::prelude::*;
 use lazy_static::lazy_static;
 
 use crate::admin_commands::GUILDS;
+use crate::feed::atom::Entry;
+use crate::feed::rss::RssItem;
 use crate::feed::Feed;
 
 mod api_params;
@@ -25,6 +27,96 @@ pub fn title_to_channel_name(s: impl AsRef<str>) -> String {
     let s = SPECIAL_REGEX.replace_all(&s, "");
     let s = SPECIAL_REGEX.replace_all(&s, "");
     s.to_string()
+}
+
+pub async fn publish_atom_entry(
+    feed_name: &str,
+    entry: &Entry,
+    ctx: &Context,
+) -> anyhow::Result<()> {
+    info!("Publishing item {} to feed {}", entry.title, feed_name);
+    let channel_name = title_to_channel_name(feed_name);
+
+    let guilds = {
+        if let Some(g) = GUILDS.get() {
+            g
+        } else {
+            error!("Could not get GUILDS static variable.");
+            anyhow::bail!("could not access GUILDS static variable");
+        }
+    };
+
+    let embed_cb = entry.to_embed();
+
+    for guild in guilds {
+        let channels = guild.channels(ctx).await?;
+        let to_publish = channels.iter().find_map(|(_, c)| {
+            if c.name == channel_name {
+                Some(c)
+            } else {
+                None
+            }
+        });
+        if let Some(channel) = to_publish {
+            info!(
+                "Publishing item {}, feed {}, on guild {}.",
+                entry.title, feed_name, guild.0
+            );
+            let msg = channel
+                .send_message(ctx, |msg| msg.embed(&embed_cb))
+                .await?;
+            if let Err(e) = msg.react(ctx, '📖').await {
+                warn!("Unable to react to message for {}: {}", entry.title, e);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn publish_rss_item(
+    feed_name: &str,
+    item: &RssItem,
+    ctx: &Context,
+) -> anyhow::Result<()> {
+    info!("Publishing item {} to feed {}", item.link, feed_name);
+    let channel_name = title_to_channel_name(feed_name);
+
+    let guilds = {
+        if let Some(g) = GUILDS.get() {
+            g
+        } else {
+            error!("Could not get GUILDS static variable.");
+            anyhow::bail!("could not access GUILDS static variable");
+        }
+    };
+
+    let embed_cb = item.to_embed();
+
+    for guild in guilds {
+        let channels = guild.channels(ctx).await?;
+        let to_publish = channels.iter().find_map(|(_, c)| {
+            if c.name == channel_name {
+                Some(c)
+            } else {
+                None
+            }
+        });
+        if let Some(channel) = to_publish {
+            info!(
+                "Publishing item {}, feed {}, on guild {}.",
+                item.link, feed_name, guild.0
+            );
+            let msg = channel
+                .send_message(ctx, |msg| msg.embed(&embed_cb))
+                .await?;
+            if let Err(e) = msg.react(ctx, '📖').await {
+                warn!("Unable to react to message for {}: {}", item.link, e);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 pub async fn setup_channels(feeds: &[Feed], ctx: &Context) {
@@ -157,6 +249,22 @@ pub async fn setup_channels(feeds: &[Feed], ctx: &Context) {
         }
 
         // Remove empty channel categories
+        let channels: Vec<_> = channels.values().cloned().collect();
+        let parents: HashSet<_> = channels.iter().filter_map(|c| c.parent_id).collect();
+        let empty_categories: Vec<_> = channels
+            .iter()
+            .filter(|&c| c.kind == ChannelType::Category && !parents.contains(&c.id))
+            .cloned()
+            .collect();
+
+        for category in empty_categories {
+            if let Err(e) = ctx.http.delete_channel(category.id.0).await {
+                warn!(
+                    "Could not delete empty category {} in guild {}: {}",
+                    category.name, guild.0, e
+                );
+            }
+        }
     }
 }
 

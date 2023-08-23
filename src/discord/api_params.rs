@@ -56,7 +56,7 @@ pub(super) fn create_channel(
 
 pub(super) fn create_thread(name: &str) -> JsonMap {
     serde_json::from_str(&format!(
-        r#"{{"name": "read-{}", "type": 11}}"#,
+        r#"{{"name": "read-{}", "type": 12}}"#,
         &name[..95]
     ))
     .expect("failed to make JsonMap")

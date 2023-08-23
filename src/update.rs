@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::sync::{Arc, OnceLock};
 
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 
 use serenity::prelude::*;
 
@@ -9,6 +9,7 @@ use tokio::sync::{mpsc, Barrier};
 use tokio::task::JoinSet;
 use tokio::time::{sleep_until, Duration, Instant};
 
+use crate::discord;
 use crate::feed::{self, Feed};
 use crate::CONFIG;
 
@@ -67,9 +68,9 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
 
 async fn diff_feed(update: Feed, feeds: &mut [Feed], ctx: &Context) {
     let feed = feeds.iter_mut().find(|f| f.url() == update.url());
-    if let Some(feed) = feed {
+    if let Some(mut feed) = feed {
         info!("Updating feed {}.", feed.title());
-        match (update, feed) {
+        match (update, &mut feed) {
             (Feed::RSS(update), Feed::RSS(ref mut rss)) => {
                 debug!("Feed {} is RSS.", rss.channel.title);
                 debug!("Updating feed {} items.", rss.channel.title);
@@ -78,6 +79,14 @@ async fn diff_feed(update: Feed, feeds: &mut [Feed], ctx: &Context) {
                 for item in update.channel.item {
                     if !set.contains(&item.link) {
                         info!("Feed {} new item: {:?}.", rss.channel.title, item.title);
+                        if let Err(e) =
+                            discord::publish_rss_item(&rss.channel.title, &item, ctx).await
+                        {
+                            warn!(
+                                "Error publishing rss item {} ({:?}) to discord: {}",
+                                item.link, item.title, e
+                            );
+                        }
                         rss.channel.item.push(item);
                     }
                 }
@@ -104,7 +113,15 @@ async fn diff_feed(update: Feed, feeds: &mut [Feed], ctx: &Context) {
                 for entry in update.entry {
                     if !set.contains(&entry.id) {
                         info!("Feed {} hew item: {}.", atom.title, entry.title);
-                        atom.entry.push(entry);
+                        if let Err(e) = discord::publish_atom_entry(&atom.title, &entry, ctx).await
+                        {
+                            warn!(
+                                "Error publishing atem item {} to discord: {}",
+                                entry.title, e
+                            );
+                        } else {
+                            atom.entry.push(entry);
+                        }
                     }
                 }
 
@@ -125,6 +142,10 @@ async fn diff_feed(update: Feed, feeds: &mut [Feed], ctx: &Context) {
             }
             _ => error!("Mismatched feed type between update and current feed",),
         }
+        info!(
+            "Finised sending updates to discord for feed {}.",
+            feed.title()
+        );
     }
 }
 

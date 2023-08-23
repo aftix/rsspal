@@ -1,4 +1,8 @@
-- add more commands to bot
-- add startup to bot that configures discord server channels
-- publish new items to discord
-- Add read/unread feed channels
+- add marking read/unread on items
+- add export/import feed list
+- add command to edit feed
+- add command to delete feed
+- add command to add feed
+- add help command
+- add command to change polling interval
+- add command to reload feed channel

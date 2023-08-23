@@ -127,3 +127,10 @@ pub fn from_url(
 
     Ok(feed)
 }
+
+fn is_image_mime_type(mime: impl AsRef<str>) -> bool {
+    match mime.as_ref() {
+        "image/jpeg" | "image/jpg" | "image/png" | "image/gif" => true,
+        _ => false,
+    }
+}
