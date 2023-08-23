@@ -10,7 +10,10 @@ use log::{debug, info};
 use clap::Parser;
 
 #[derive(Clone, PartialEq, Eq, Hash, Parser)]
+#[command(name = "rsspal")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
+#[command(author = "aftix (aftix@aftix.xyz)")]
+#[command(about = "A Discord bot to turn a server into an RSS reader", long_about = None)]
 struct Args {
     // Discord token to use for the Discord API
     #[arg(short, long, default_value_t = String::default())]

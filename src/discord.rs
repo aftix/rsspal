@@ -17,6 +17,13 @@ use crate::feed::Feed;
 
 mod api_params;
 
+pub fn truncate(s: &str, max: usize) -> &str {
+    match s.char_indices().nth(max) {
+        None => s,
+        Some((idx, _)) => &s[..idx],
+    }
+}
+
 pub fn title_to_channel_name(s: impl AsRef<str>) -> String {
     lazy_static! {
         static ref SPACE_REGEX: Regex = Regex::new(r"\s+").unwrap();
@@ -27,10 +34,11 @@ pub fn title_to_channel_name(s: impl AsRef<str>) -> String {
     let s = SPACE_REGEX.replace_all(s.as_ref(), "-");
     let s = SPECIAL_REGEX.replace_all(&s, "");
     let s = SPECIAL_REGEX.replace_all(&s, "");
-    s[..95].to_string()
+    truncate(&s, 95).to_lowercase().to_string()
 }
 
 async fn mark(
+    guild_id: GuildId,
     msg: Message,
     ctx: &Context,
     channel_name: impl FnOnce(&str) -> String,
@@ -47,9 +55,27 @@ async fn mark(
         .ok_or_else(|| anyhow::anyhow!("message {} is not in guild channel", msg.id))?;
     let channel_name = channel_name(channel.name());
     let embed: CreateEmbed = msg.embeds[0].clone().into();
-    msg.delete(&ctx).await?;
 
-    let channels = ctx.http.get_channels(channel.guild_id.0).await?;
+    let mut channels = ctx.http.get_channels(channel.guild_id.0).await?;
+    debug!("{:?}", channels);
+    debug!("Searching for threads");
+    match guild_id.get_active_threads(ctx).await {
+        Err(e) => warn!("Failed to get active threads in {}: {}", guild_id.0, e),
+        Ok(threads) => {
+            channels.extend(threads.threads.into_iter());
+        }
+    }
+    let mut archived_threads = Vec::new();
+    for chan in &channels {
+        if let Ok(threads) = ctx
+            .http
+            .get_channel_archived_public_threads(chan.id.0, None, None)
+            .await
+        {
+            archived_threads.extend(threads.threads.into_iter());
+        }
+    }
+    channels.extend(archived_threads.into_iter());
     let new_channel = channels
         .iter()
         .find(|ch| ch.name == channel_name)
@@ -63,21 +89,31 @@ async fn mark(
             })
         })
         .await?;
+    msg.delete(&ctx).await?;
     new_msg.react(&ctx, emoji).await?;
 
     Ok(())
 }
 
-pub async fn mark_read(msg: Message, ctx: &Context) -> anyhow::Result<()> {
-    mark(msg, ctx, |name| format!("read-{}", &name[..95]), '📕').await
+pub async fn mark_read(guild_id: GuildId, msg: Message, ctx: &Context) -> anyhow::Result<()> {
+    mark(
+        guild_id,
+        msg,
+        ctx,
+        |name| format!("read-{}", truncate(&name, 95)),
+        '📕',
+    )
+    .await
 }
 
-pub async fn mark_unread(msg: Message, ctx: &Context) -> anyhow::Result<()> {
+pub async fn mark_unread(guild_id: GuildId, msg: Message, ctx: &Context) -> anyhow::Result<()> {
     mark(
+        guild_id,
         msg,
         ctx,
         |name| {
-            name.strip_prefix("read-")
+            truncate(name, 100)
+                .strip_prefix("read-")
                 .map(String::from)
                 .unwrap_or_else(|| name.to_string())
         },
@@ -95,7 +131,7 @@ pub async fn publish_atom_entry(
     let channel_name = if entry.read.is_some() {
         title_to_channel_name(feed_name)
     } else {
-        format!("read-{}", &title_to_channel_name(feed_name)[..95])
+        format!("read-{}", &title_to_channel_name(feed_name))
     };
 
     let guilds = {
@@ -142,10 +178,10 @@ pub async fn publish_rss_item(
     ctx: &Context,
 ) -> anyhow::Result<()> {
     info!("Publishing item {} to feed {}", item.link, feed_name);
-    let channel_name = if item.read.is_some() {
+    let channel_name = if item.read.is_none() {
         title_to_channel_name(feed_name)
     } else {
-        format!("read-{}", &title_to_channel_name(feed_name)[..95])
+        format!("read-{}", &title_to_channel_name(feed_name))
     };
 
     let guilds = {
@@ -170,8 +206,8 @@ pub async fn publish_rss_item(
         });
         if let Some(channel) = to_publish {
             info!(
-                "Publishing item {}, feed {}, on guild {}.",
-                item.link, feed_name, guild.0
+                "Publishing item {}, feed {}, channel {}, on guild {}.",
+                item.link, feed_name, channel.name, guild.0
             );
             let msg = channel
                 .send_message(ctx, |msg| msg.embed(&embed_cb))
@@ -199,119 +235,66 @@ pub async fn setup_channels(feeds: &[Feed], ctx: &Context) {
 
     for guild in guilds {
         info!("Setting up guild {}.", guild);
-        let channels = match ctx.http.get_channels(guild.0).await {
+        let mut channels = match ctx.http.get_channels(guild.0).await {
             Ok(c) => c,
             Err(e) => {
                 error!("Could not get channels for guild {}: {}", guild.0, e);
                 break;
             }
         };
+        match guild.get_active_threads(ctx).await {
+            Err(e) => warn!("Failed to get active threads in {}: {}", guild.0, e),
+            Ok(threads) => {
+                channels.extend(threads.threads.into_iter());
+            }
+        }
+        let mut archived_threads = Vec::new();
+        for chan in &channels {
+            if let Ok(threads) = ctx
+                .http
+                .get_channel_archived_public_threads(chan.id.0, None, None)
+                .await
+            {
+                archived_threads.extend(threads.threads.into_iter());
+            }
+        }
+        channels.extend(archived_threads.into_iter());
+
         let mut channels_by_name: HashMap<_, _> = channels
             .iter()
             .cloned()
             .map(|c| (c.name.clone(), c))
             .collect();
         let mut channels: HashMap<_, _> = channels.into_iter().map(|c| (c.id, c)).collect();
+        debug!("{:?}", channels_by_name);
 
         for feed in feeds {
             let chan_name = title_to_channel_name(&feed.title());
+            if setup_channel_category(
+                guild.0,
+                feed.discord_category(),
+                &mut channels,
+                &mut channels_by_name,
+                ctx,
+            )
+            .await
+            .is_none()
+            {
+                return;
+            }
 
-            // Setup the channels
-            let new_channel = if let Some(channel) = channels_by_name.get(&chan_name) {
-                // Channel exists
-                info!(
-                    "Found channel {} in guild {}, ensuring correct metadata.",
-                    channel.name, guild.0
-                );
-
-                // Set correct channel category
-                let category = feed.discord_category();
-                setup_channel_metadata(
-                    &channels_by_name,
-                    category.as_ref().map(String::as_str),
-                    &channel,
-                    ctx,
-                )
-                .await
+            let add_channel = if let Some(channel) = channels_by_name.get(&chan_name) {
+                update_channel_metadata(&channel, &feed, &channels_by_name, ctx).await
             } else {
-                // Channel does not exist
-                // Make sure to get the correct category
-                let parent = if let Some(category) = feed.discord_category() {
-                    // Needs a category
-                    let category = title_to_channel_name(category);
-
-                    // Make sure category exists
-                    let cat_channel = if let Some(cat_chan) = channels_by_name.get(&category) {
-                        Some(cat_chan.clone())
-                    } else {
-                        let create = api_params::create_channel(&category, true, None, None);
-                        match ctx
-                            .http
-                            .create_channel(guild.0, &create, Some("rsspal creating category"))
-                            .await
-                        {
-                            Err(e) => {
-                                error!(
-                                    "Error creating category {} in guild {}: {}",
-                                    category, guild.0, e
-                                );
-                                None
-                            }
-                            Ok(cat_chan) => Some(cat_chan),
-                        }
-                    };
-
-                    // add category channel to hash maps
-                    if let Some(chan) = cat_channel.as_ref() {
-                        channels.insert(chan.id.clone(), chan.clone());
-                        channels_by_name.insert(chan.name.clone(), chan.clone());
-                    }
-
-                    cat_channel
-                } else {
-                    // No category
-                    None
-                };
-                // Now make the feed channel
-                let create = api_params::create_channel(
-                    &chan_name,
-                    false,
-                    Some(&feed.description()),
-                    parent.map(|parent| parent.id.0),
-                );
-
-                match ctx
-                    .http
-                    .create_channel(guild.0, &create, Some("rsspal creating feed channel"))
-                    .await
-                {
-                    Err(e) => error!(
-                        "Failed creating channel {} in guild {}: {}",
-                        chan_name, guild.0, e
-                    ),
-                    Ok(chan) => {
-                        // add new channel to hashmaps
-                        channels.insert(chan.id.clone(), chan.clone());
-                        channels_by_name.insert(chan.name.clone(), chan.clone());
-
-                        // Create the thread for read items
-                        let thread = api_params::create_thread(&chan_name);
-                        if let Err(e) = ctx.http.create_private_thread(chan.id.0, &thread).await {
-                            error!(
-                                "Unable to create read thread for channel {}: {}",
-                                chan_name, e
-                            );
-                        }
-                    }
-                };
-
-                None
+                create_channel(guild.0, &feed, &channels_by_name, ctx).await
             };
 
-            // At the last, create any new channels needed
-            if let Some(new) = new_channel {
-                channels_by_name.insert(new.name.clone(), new.clone());
-                channels.insert(new.id.clone(), new);
+            if let Some((new_chan, new_thread)) = add_channel {
+                channels.insert(new_chan.id.clone(), new_chan.clone());
+                channels_by_name.insert(new_chan.name.clone(), new_chan);
+
+                channels.insert(new_thread.id.clone(), new_thread.clone());
+                channels_by_name.insert(new_thread.name.clone(), new_thread);
             }
         }
 
@@ -336,82 +319,200 @@ pub async fn setup_channels(feeds: &[Feed], ctx: &Context) {
 }
 
 type NameMap = HashMap<String, GuildChannel>;
+type IdMap = HashMap<ChannelId, GuildChannel>;
 
-async fn setup_channel_metadata(
-    by_name: &NameMap,
-    category: Option<&str>,
-    channel: &GuildChannel,
+async fn setup_channel_category(
+    guild_id: u64,
+    name: Option<String>,
+    by_id: &mut IdMap,
+    by_name: &mut NameMap,
     ctx: &Context,
-) -> Option<GuildChannel> {
-    debug!(
-        "Setting up channel category {:?} for {} in guild {}.",
-        category, channel.name, channel.guild_id
-    );
+) -> Option<()> {
+    if name.is_none() {
+        return Some(());
+    }
 
-    match category {
-        // Case when feed has a discord category to belong to
-        Some(category) => {
-            let category = category.to_owned();
-            // If category exists, you can just set the right parent_id
-            let (parent, new) = if let Some(cat_chan) = by_name.get(&category) {
-                (cat_chan.clone(), false)
-            } else {
-                // Create non existant category
-                let create = api_params::create_channel(&category, true, None, None);
+    let name = title_to_channel_name(&name.unwrap());
 
-                match ctx
-                    .http
-                    .create_channel(
-                        channel.guild_id.0,
-                        &create,
-                        Some("rsspal creating category"),
-                    )
-                    .await
-                {
-                    Err(e) => {
-                        error!("Error creating category {}: {}", category, e);
-                        return None;
-                    }
-                    Ok(cat_chan) => (cat_chan, true),
-                }
-            };
-            let modify = api_params::modify_channel(
-                Some(&channel.name),
-                Some(parent.id.0),
-                channel.topic.as_ref().map(String::as_str),
-                true,
-            );
-            if let Err(e) = ctx
-                .http
-                .edit_channel(channel.id.0, &modify, Some("rsspal updating channel"))
-                .await
-            {
-                error!("Error editing channel {}: {}", channel.name, e);
-            }
+    if by_name.contains_key(&name) {
+        return Some(());
+    }
 
-            if new {
-                Some(parent)
-            } else {
-                None
-            }
-        }
-        // Case for feeds without a category
-        None => {
-            let modify = api_params::modify_channel(
-                Some(&channel.name),
-                None,
-                channel.topic.as_ref().map(String::as_str),
-                true,
-            );
-            if let Err(e) = ctx
-                .http
-                .edit_channel(channel.id.0, &modify, Some("rsspal updating channel"))
-                .await
-            {
-                error!("Error editing channel {}: {}", channel.name, e);
-            }
-
+    // Need to set a category channel that doesn't exist
+    let create = api_params::create_channel(&name, true, None, None);
+    match ctx
+        .http
+        .create_channel(guild_id, &create, Some("rsspal creating category"))
+        .await
+    {
+        Err(e) => {
+            error!("Could not create category {}: {}", name, e);
             None
         }
+        Ok(channel) => {
+            info!("Created channel category {}.", channel.name);
+            by_name.insert(channel.name.clone(), channel.clone());
+            by_id.insert(channel.id, channel);
+            Some(())
+        }
     }
+}
+
+// Optionally returns new (feed channel, feed channel thread)
+async fn update_channel_metadata(
+    channel: &GuildChannel,
+    feed: &Feed,
+    by_name: &NameMap,
+    ctx: &Context,
+) -> Option<(GuildChannel, GuildChannel)> {
+    let name = title_to_channel_name(&feed.title());
+    let read_title = format!("read-{}", truncate(&name, 95));
+
+    let parent_id = if let Some(category) = feed.discord_category() {
+        if let Some(parent) = by_name.get(&title_to_channel_name(&category)) {
+            Some(parent.id.0)
+        } else {
+            warn!(
+                "Feed {} wants category {} but it does not exist.",
+                feed.title(),
+                category
+            );
+            None
+        }
+    } else {
+        None
+    };
+
+    info!("Modifying channel {}.", channel.id.0);
+    let modify = api_params::modify_channel(Some(&name), parent_id, None, false);
+    let new_channel = match ctx
+        .http
+        .edit_channel(
+            channel.id.0,
+            &modify,
+            Some("rsspal editing channel metadata"),
+        )
+        .await
+    {
+        Err(e) => {
+            error!("Failed to edit channel {}: {}", channel.id.0, e);
+            return None;
+        }
+        Ok(chan) => chan,
+    };
+
+    // Now, edit or create thread within the channel
+    let new_thread = match by_name.get(&read_title) {
+        None => {
+            let msg = match new_channel
+                .send_message(ctx, |msg| msg.content("View read news items"))
+                .await
+            {
+                Err(e) => {
+                    error!("Failed to send message to {}: {}", new_channel.id.0, e);
+                    return None;
+                }
+                Ok(msg) => msg,
+            };
+            let create = api_params::create_thread(&read_title);
+            match ctx
+                .http
+                .create_public_thread(new_channel.id.0, msg.id.0, &create)
+                .await
+            {
+                Err(e) => {
+                    error!("Failed to create thread {}: {}", read_title, e);
+                    return None;
+                }
+                Ok(thread) => thread,
+            }
+        }
+        Some(thread) => {
+            let edit = api_params::modify_channel(
+                Some(&read_title),
+                None,
+                Some(&format!("Read items: {}", feed.description())),
+                false,
+            );
+            match ctx
+                .http
+                .edit_channel(thread.id.0, &edit, Some("rsspal editing read thread"))
+                .await
+            {
+                Err(e) => {
+                    error!("Failed to edit thread {}: {}", thread.id.0, e);
+                    return None;
+                }
+                Ok(thread) => thread,
+            }
+        }
+    };
+
+    Some((new_channel, new_thread))
+}
+
+// Optionally returns new (feed channel, feed channel thread)
+async fn create_channel(
+    guild_id: u64,
+    feed: &Feed,
+    by_name: &NameMap,
+    ctx: &Context,
+) -> Option<(GuildChannel, GuildChannel)> {
+    let name = title_to_channel_name(&feed.title());
+    let read_title = format!("read-{}", truncate(&name, 95));
+
+    let parent_id = if let Some(category) = feed.discord_category() {
+        if let Some(parent) = by_name.get(&title_to_channel_name(&category)) {
+            Some(parent.id.0)
+        } else {
+            warn!(
+                "Feed {} wants category {} but it does not exist.",
+                feed.title(),
+                category
+            );
+            None
+        }
+    } else {
+        None
+    };
+
+    info!("Creating channel {}.", name);
+    let create = api_params::create_channel(&name, false, Some(&feed.description()), parent_id);
+    let new_channel = match ctx
+        .http
+        .create_channel(guild_id, &create, Some("rsspal creating channel"))
+        .await
+    {
+        Err(e) => {
+            error!("Failed to create channel {}: {}", name, e);
+            return None;
+        }
+        Ok(chan) => chan,
+    };
+
+    let msg = match new_channel
+        .send_message(ctx, |msg| msg.content("View read news items"))
+        .await
+    {
+        Err(e) => {
+            error!("Failed to send message to {}: {}", new_channel.id.0, e);
+            return Some((new_channel.clone(), new_channel));
+        }
+        Ok(msg) => msg,
+    };
+
+    let create = api_params::create_thread(&read_title);
+    let new_thread = match ctx
+        .http
+        .create_public_thread(new_channel.id.0, msg.id.0, &create)
+        .await
+    {
+        Err(e) => {
+            error!("Failed to create thread {}: {}", read_title, e);
+            return Some((new_channel.clone(), new_channel));
+        }
+        Ok(thread) => thread,
+    };
+
+    Some((new_channel, new_thread))
 }

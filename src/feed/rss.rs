@@ -226,9 +226,9 @@ pub mod rfc822 {
         match date {
             Some(dt) => {
                 let s = format!("{}", dt.format(FORMAT));
-                serializer.serialize_str(&s)
+                serializer.serialize_some(&s)
             }
-            _ => unreachable!(),
+            _ => serializer.serialize_none(),
         }
     }
 
@@ -236,8 +236,12 @@ pub mod rfc822 {
     where
         D: Deserializer<'de>,
     {
-        let s = String::deserialize(deserializer)?;
-        into_datetime(s).map(Some).map_err(serde::de::Error::custom)
+        let s = Option::<String>::deserialize(deserializer)?;
+        if let Some(s) = s {
+            into_datetime(s).map(Some).map_err(serde::de::Error::custom)
+        } else {
+            Ok(None)
+        }
     }
 }
 

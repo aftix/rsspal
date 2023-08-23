@@ -2,6 +2,7 @@ use std::sync::{Arc, OnceLock};
 
 use log::{debug, error, info, warn};
 
+use serenity::framework::standard::Args;
 use tokio::sync::Barrier;
 use tokio::task::spawn;
 
@@ -23,7 +24,7 @@ pub static GUILDS: OnceLock<Vec<GuildId>> = OnceLock::new();
 pub static USER_ID: OnceLock<UserId> = OnceLock::new();
 
 #[group]
-#[commands(ping, exit)]
+#[commands(ping, exit, add)]
 pub struct Admin;
 
 pub struct Handler;
@@ -87,6 +88,11 @@ impl EventHandler for Handler {
             }
         };
 
+        if reaction.user_id.is_some_and(|id| id == current_user) {
+            debug!("Reaction given by bot, ignoring.");
+            return;
+        }
+
         if current_user != msg.author.id {
             debug!("Reaction not on rsspal bot user message, ignoring.");
             return;
@@ -127,9 +133,16 @@ impl EventHandler for Handler {
             return;
         };
 
+        let guild_id = if let Some(id) = reaction.guild_id {
+            id
+        } else {
+            warn!("Reaction did not occur in a guild, ignoring.");
+            return;
+        };
+
         // Check for the emoji to mark a message read
         if reaction.emoji == '📖'.into() {
-            if let Err(e) = discord::mark_read(msg, &ctx).await {
+            if let Err(e) = discord::mark_read(guild_id, msg, &ctx).await {
                 error!("failed to mark item as read: {}", e);
             }
 
@@ -148,8 +161,8 @@ impl EventHandler for Handler {
                 }
             };
         } else if reaction.emoji == '📕'.into() {
-            if let Err(e) = discord::mark_unread(msg, &ctx).await {
-                error!("failed to mark item as read: {}", e);
+            if let Err(e) = discord::mark_unread(guild_id, msg, &ctx).await {
+                error!("failed to mark item as unread: {}", e);
             }
 
             match COMMANDS.get() {
@@ -174,16 +187,70 @@ impl EventHandler for Handler {
 }
 
 #[command]
+#[num_args(0)]
+#[description("Gracefully shutdown the bot.")]
 pub async fn exit(_ctx: &Context, _msg: &Message) -> CommandResult {
     info!("Recieved exit command.");
     send_termination().await.map_err(|e| CommandError::from(e))
 }
 
 #[command]
+#[num_args(0)]
+#[description("Check connectivity with a ping pong.")]
 pub async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     info!("Recieved ping command.");
     msg.channel_id
         .send_message(&ctx.http, |create| create.content("Pong!"))
         .await?;
     Ok(())
+}
+
+#[command]
+#[description("Add a feed to the bot list.")]
+#[usage("~add <URL> [title]")]
+#[min_args(1)]
+#[max_args(2)]
+pub async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    info!("Recieved add command");
+    let url: String = match args.single() {
+        Err(e) => {
+            info!(
+                "Help command used without correct format ({}): {} ",
+                e, msg.content
+            );
+            match msg.reply(ctx, "Incorrect command usage.").await {
+                Err(err) => {
+                    error!(
+                        "Error replying to message {}: {} and parsing command: {}",
+                        msg.id.0, err, e
+                    );
+                    return Err(anyhow::anyhow!(
+                        "error replying to message {}: {} and parsing command: {}",
+                        msg.id.0,
+                        err,
+                        e
+                    )
+                    .into());
+                }
+                Ok(_) => return Err(anyhow::anyhow!("error parsing arguments: {}", e).into()),
+            }
+        }
+        Ok(arg) => arg,
+    };
+
+    let title: Option<String> = args.single().ok();
+
+    match feed::from_url(&url, title, None) {
+        Err(e) => Err(anyhow::anyhow!("failed getting url {}: {}", url, e).into()),
+        Ok(feed) => {
+            let barrier = Arc::new(Barrier::new(2));
+            let send = COMMANDS.get().expect("failed to get COMMANDS static");
+            if let Err(e) = send.send((Command::AddFeed(feed), barrier.clone())).await {
+                error!("Failed to send command: {}", e);
+                return Err(anyhow::anyhow!("failed to send command: {}", e).into());
+            }
+            barrier.wait().await;
+            Ok(())
+        }
+    }
 }

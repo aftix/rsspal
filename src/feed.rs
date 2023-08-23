@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use std::fs::File;
 
 use log::{info, warn};
@@ -67,13 +66,6 @@ impl Feed {
         match self {
             Self::RSS(rss) => rss.channel.link.clone(),
             Self::ATOM(atom) => atom.url.clone(),
-        }
-    }
-
-    pub fn last_updated(&self) -> Option<DateTime<Utc>> {
-        match self {
-            Self::RSS(rss) => rss.channel.last_updated.clone(),
-            Self::ATOM(atom) => atom.last_updated.clone(),
         }
     }
 

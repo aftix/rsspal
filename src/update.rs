@@ -46,11 +46,39 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                 let (command, wait) = cmdwait
                     .ok_or_else(|| anyhow::anyhow!("failed recieveing on channel"))?;
                 match command {
-                    Command::AddFeed(feed) => feeds.push(feed),
+                    Command::AddFeed(feed) => {
+                        info!("Adding feed {}.", feed.title());
+                        if feeds.iter().find(|f| feed.url() == f.url()).is_some() {
+                            info!("Feed {}, already exists.", feed.title());
+                            continue
+                        }
+                        feeds.push(feed);
+
+                        let new_feeds = &feeds[feeds.len()-1..];
+                        discord::setup_channels(&new_feeds, &ctx).await;
+                        info!("Adding entries for feed {}", new_feeds[0].title());
+                        match &feeds[0] {
+                            Feed::RSS(rss) => {
+                                for item in &rss.channel.item {
+                                    let publish = discord::publish_rss_item(&new_feeds[0].title(), item, &ctx).await;
+                                    if let Err(e) = publish {
+                                        warn!("failed to publish rss item to feed: {}", e);
+                                    }
+                                }
+                            },
+                            Feed::ATOM(atom) => {
+                                for entry in &atom.entry {
+                                    let publish = discord::publish_atom_entry(&new_feeds[0].title(), entry, &ctx).await;
+                                    if let Err(e) = publish {
+                                        warn!("failed to publish atom item to feed: {}", e);
+                                    }
+                                }},
+                        };
+                    },
                     Command::MarkRead(name, link) => {
                         let save = match feeds.iter_mut().find(|feed| {
                             let channel_title = crate::discord::title_to_channel_name(feed.title());
-                            let read_title = format!("read-{}", &channel_title[..95]);
+                            let read_title = format!("read-{}", discord::truncate(&channel_title, 95));
                             channel_title == name || read_title == name
                         }) {
                             None => {
@@ -82,7 +110,7 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                     Command::MarkUnread(name, link) => {
                         let save = match feeds.iter_mut().find(|feed| {
                             let channel_title = crate::discord::title_to_channel_name(feed.title());
-                            let read_title = format!("read-{}", &channel_title[..95]);
+                            let read_title = format!("read-{}", discord::truncate(&channel_title, 95));
                             channel_title == name || read_title == name
                         }) {
                             None => {
