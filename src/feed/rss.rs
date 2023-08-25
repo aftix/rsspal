@@ -28,6 +28,8 @@ pub struct RssChannel {
     pub description: String,
     #[serde(skip, default)]
     pub link: String,
+    #[serde(default)]
+    pub url: String,
     pub copyright: Option<String>,
     #[serde(rename = "managingEditor")]
     pub managing_editor: Option<String>,
@@ -254,7 +256,7 @@ impl RssFeed {
         let url: Url = Url::parse(url.as_ref())?;
 
         // Stream rss feed to the write end of the pipe in a new task
-        let feed = if url.scheme() == "http" || url.scheme() == "https" {
+        let mut feed = if url.scheme() == "http" || url.scheme() == "https" {
             debug!("Making network request for {}.", url);
             let bytes = {
                 let url = url.clone();
@@ -263,16 +265,17 @@ impl RssFeed {
                         .block_on(async move { reqwest::get(url.clone()).await?.bytes().await })
                 })
             }?;
-            xml_from_reader(url, BufReader::new(bytes.as_ref()))
+            xml_from_reader(url.as_str(), BufReader::new(bytes.as_ref()))
         } else if url.scheme() == "file" {
             debug!("Reading {} from disk.", url);
             let path = url.path();
             let file = File::open(path)?;
-            xml_from_reader(url, BufReader::new(file))
+            xml_from_reader(url.as_str(), BufReader::new(file))
         } else {
             anyhow::bail!("{}: unsupported url schema", url)
         }?;
 
+        feed.channel.url = url.to_string();
         Ok(feed)
     }
 

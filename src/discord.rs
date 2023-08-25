@@ -57,7 +57,6 @@ async fn mark(
     let embed: CreateEmbed = msg.embeds[0].clone().into();
 
     let mut channels = ctx.http.get_channels(channel.guild_id.0).await?;
-    debug!("{:?}", channels);
     debug!("Searching for threads");
     match guild_id.get_active_threads(ctx).await {
         Err(e) => warn!("Failed to get active threads in {}: {}", guild_id.0, e),
@@ -120,6 +119,61 @@ pub async fn mark_unread(guild_id: GuildId, msg: Message, ctx: &Context) -> anyh
         '📖',
     )
     .await
+}
+
+// Returns index of feed to remove in feeds
+pub async fn remove_feed(msg: Message, id: &str, feeds: &[Feed], ctx: &Context) -> Option<usize> {
+    let channel_name = title_to_channel_name(id);
+    let location = feeds.iter().enumerate().find_map(|(idx, feed)| {
+        if title_to_channel_name(feed.title()) == channel_name || feed.url() == id {
+            Some(idx)
+        } else {
+            None
+        }
+    });
+
+    if location.is_none() {
+        if let Err(e) = msg.reply(ctx, &format!("Feed {} not found", id)).await {
+            error!("Failed to send message to {}: {}", msg.channel_id.0, e);
+        }
+        warn!("Could not find feed {} to remove.", id);
+        return None;
+    }
+
+    let location = location.unwrap();
+
+    let guilds = GUILDS
+        .get()
+        .expect("failed to read GUILDS static variable")
+        .clone();
+
+    let title = feeds[location].title();
+    let channel_name = title_to_channel_name(title);
+
+    for guild in guilds {
+        let channels = match ctx.http.get_channels(guild.0).await {
+            Err(e) => {
+                warn!("Failed to get channels for guild {}: {}", guild.0, e);
+                continue;
+            }
+            Ok(c) => c,
+        };
+
+        let channel = channels.iter().find(|c| c.name() == channel_name);
+        if let Some(channel) = channel {
+            match ctx.http.delete_channel(channel.id.0).await {
+                Err(e) => error!("Failed deleting channel {} in guild {}: {}", id, guild.0, e),
+                _ => (),
+            }
+        } else {
+            warn!(
+                "Removing feed {} but channel {} not found in guild {}.",
+                id, channel_name, guild.0
+            );
+        }
+    }
+
+    Some(location)
 }
 
 pub async fn publish_atom_entry(
@@ -266,7 +320,6 @@ pub async fn setup_channels(feeds: &[Feed], ctx: &Context) {
             .map(|c| (c.name.clone(), c))
             .collect();
         let mut channels: HashMap<_, _> = channels.into_iter().map(|c| (c.id, c)).collect();
-        debug!("{:?}", channels_by_name);
 
         for feed in feeds {
             let chan_name = title_to_channel_name(&feed.title());
@@ -298,23 +351,12 @@ pub async fn setup_channels(feeds: &[Feed], ctx: &Context) {
             }
         }
 
-        // Remove empty channel categories
-        let channels: Vec<_> = channels.values().cloned().collect();
-        let parents: HashSet<_> = channels.iter().filter_map(|c| c.parent_id).collect();
-        let empty_categories: Vec<_> = channels
-            .iter()
-            .filter(|&c| c.kind == ChannelType::Category && !parents.contains(&c.id))
-            .cloned()
-            .collect();
-
-        for category in empty_categories {
-            if let Err(e) = ctx.http.delete_channel(category.id.0).await {
-                warn!(
-                    "Could not delete empty category {} in guild {}: {}",
-                    category.name, guild.0, e
-                );
-            }
-        }
+        remove_empty_categories(
+            &guild,
+            channels.into_values().collect::<Vec<_>>().as_slice(),
+            ctx,
+        )
+        .await;
     }
 }
 
@@ -354,6 +396,24 @@ async fn setup_channel_category(
             by_name.insert(channel.name.clone(), channel.clone());
             by_id.insert(channel.id, channel);
             Some(())
+        }
+    }
+}
+
+async fn remove_empty_categories(guild: &GuildId, channels: &[GuildChannel], ctx: &Context) {
+    let parents: HashSet<_> = channels.iter().filter_map(|c| c.parent_id).collect();
+    let empty_categories: Vec<_> = channels
+        .iter()
+        .filter(|&c| c.kind == ChannelType::Category && !parents.contains(&c.id))
+        .cloned()
+        .collect();
+
+    for category in empty_categories {
+        if let Err(e) = ctx.http.delete_channel(category.id.0).await {
+            warn!(
+                "Could not delete empty category {} in guild {}: {}",
+                category.name, guild.0, e
+            );
         }
     }
 }

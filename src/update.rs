@@ -3,6 +3,7 @@ use std::sync::{Arc, OnceLock};
 
 use log::{debug, error, info, warn};
 
+use serenity::model::prelude::*;
 use serenity::prelude::*;
 
 use tokio::sync::{mpsc, Barrier};
@@ -15,9 +16,10 @@ use crate::CONFIG;
 
 pub static COMMANDS: OnceLock<mpsc::Sender<(Command, Arc<Barrier>)>> = OnceLock::new();
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub enum Command {
     AddFeed(Feed),
+    RemoveFeed(Message, String),
     MarkRead(String, String),   // Channel name, item url
     MarkUnread(String, String), // Channel name, item url
     Exit,
@@ -74,6 +76,17 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                                     }
                                 }},
                         };
+                    },
+                    Command::RemoveFeed(msg, id) => {
+                        info!("Removing feed {}", id);
+
+                        if let Some(idx) = discord::remove_feed(msg, &id, feeds.as_slice(), &ctx).await {
+                            feeds.remove(idx);
+                            if let Err(e) = feed::export(&feeds).await {
+                                warn!("Error exporting feeds: {}", e);
+                            }
+                        }
+
                     },
                     Command::MarkRead(name, link) => {
                         let save = match feeds.iter_mut().find(|feed| {

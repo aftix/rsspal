@@ -64,7 +64,7 @@ impl Feed {
 
     pub fn url(&self) -> String {
         match self {
-            Self::RSS(rss) => rss.channel.link.clone(),
+            Self::RSS(rss) => rss.channel.url.clone(),
             Self::ATOM(atom) => atom.url.clone(),
         }
     }

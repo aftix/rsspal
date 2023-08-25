@@ -24,7 +24,7 @@ pub static GUILDS: OnceLock<Vec<GuildId>> = OnceLock::new();
 pub static USER_ID: OnceLock<UserId> = OnceLock::new();
 
 #[group]
-#[commands(ping, exit, add)]
+#[commands(ping, exit, add, remove)]
 pub struct Admin;
 
 pub struct Handler;
@@ -215,7 +215,7 @@ pub async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
     let url: String = match args.single() {
         Err(e) => {
             info!(
-                "Help command used without correct format ({}): {} ",
+                "Add command used without correct format ({}): {} ",
                 e, msg.content
             );
             match msg.reply(ctx, "Incorrect command usage.").await {
@@ -241,7 +241,31 @@ pub async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
     let title: Option<String> = args.single().ok();
 
     match feed::from_url(&url, title, None) {
-        Err(e) => Err(anyhow::anyhow!("failed getting url {}: {}", url, e).into()),
+        Err(e) => {
+            match msg
+                .reply(ctx, &format!("Failed to load feed from {}: {}", url, e))
+                .await
+            {
+                Err(err) => {
+                    error!(
+                        "Failed loading feed from {}: {} and sending reply to {}: {}",
+                        url, e, msg.id.0, err
+                    );
+                    Err(anyhow::anyhow!(
+                        "Failed loading feed from {}: {} and sending reply to {}: {}",
+                        url,
+                        e,
+                        msg.id.0,
+                        err
+                    )
+                    .into())
+                }
+                _ => {
+                    error!("Failed loading feed from {}: {}", url, e);
+                    Err(anyhow::anyhow!("Failed loading feed from {}: {}", url, e).into())
+                }
+            }
+        }
         Ok(feed) => {
             let barrier = Arc::new(Barrier::new(2));
             let send = COMMANDS.get().expect("failed to get COMMANDS static");
@@ -253,4 +277,68 @@ pub async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
             Ok(())
         }
     }
+}
+
+#[command]
+#[description("Remove a feed from the bot.")]
+#[usage("~remove <url|title>")]
+#[num_args(1)]
+pub async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    info!("Recieved remove command.");
+    let id: String = match args.parse() {
+        Err(e) => {
+            error!(
+                "Add command used without proper form ({}): {}",
+                e, msg.content,
+            );
+            match msg.reply(ctx, "Incorrect command usage.").await {
+                Err(err) => {
+                    error!(
+                        "Error replying to message {}: {} and parsing command: {}",
+                        msg.id.0, err, e
+                    );
+                    return Err(anyhow::anyhow!(
+                        "Error replying to message {}: {} and parsing command: {}",
+                        msg.id.0,
+                        err,
+                        e
+                    )
+                    .into());
+                }
+                Ok(_) => return Err(anyhow::anyhow!("error parsing arguments: {}", e).into()),
+            }
+        }
+        Ok(s) => s,
+    };
+
+    let barrier = Arc::new(Barrier::new(2));
+    let send = COMMANDS.get().expect("failed to get COMMANDS static");
+    if let Err(e) = send
+        .send((Command::RemoveFeed(msg.clone(), id), barrier.clone()))
+        .await
+    {
+        error!("Failed to send command: {}", e);
+        match msg.reply(ctx, "Internal error").await {
+            Err(err) => {
+                error!(
+                    "Failed to send command: {} and reply to message {}: {}",
+                    e, msg.id.0, err
+                );
+                return Err(anyhow::anyhow!(
+                    "Failed to send command: {} and reply to message {}: {}",
+                    e,
+                    msg.id.0,
+                    err
+                )
+                .into());
+            }
+            Ok(_) => {
+                error!("Failed to send command: {}", e);
+                return Err(anyhow::anyhow!("Failed to send command: {}", e).into());
+            }
+        }
+    }
+
+    barrier.wait().await;
+    Ok(())
 }

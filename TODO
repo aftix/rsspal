@@ -1,7 +1,5 @@
 - add export/import feed list
 - add command to edit feed
-- add command to delete feed
-- add command to add feed
 - add help command
 - add command to change polling interval
 - add command to reload feed channel
