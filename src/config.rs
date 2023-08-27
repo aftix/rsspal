@@ -1,11 +1,11 @@
 use std::env;
-use std::fs::File;
+use std::fs::{create_dir_all, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use log::{debug, info};
+use log::{debug, error, info};
 
 use clap::Parser;
 
@@ -62,7 +62,6 @@ fn get_data_dir() -> PathBuf {
         return path;
     }
 
-    
     env::current_dir().expect("Can not access current directory")
 }
 
@@ -128,6 +127,17 @@ impl Config {
 
         if let Some(i) = args.interval {
             config.interval = i;
+        }
+
+        if let Err(e) = create_dir_all(&config.data_dir) {
+            error!("Could not create data directory: {}.", e);
+            anyhow::bail!("Could not create data directory: {}.", e);
+        };
+        if let Some(p) = config.config_file.parent() {
+            if let Err(e) = create_dir_all(p) {
+                error!("Could not create config directory: {}.", e);
+                anyhow::bail!("Could not create config directory: {}.", e);
+            }
         }
 
         if !args.token.is_empty() {
