@@ -407,7 +407,6 @@ mod test {
                 ],
                 ..Default::default()
             },
-            ..Default::default()
         };
         assert_eq!(expected_feed, feed);
     }
