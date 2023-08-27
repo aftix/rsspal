@@ -41,7 +41,7 @@ pub(super) fn create_channel(
     }
 
     if let Some(topic) = topic {
-        map.push_str(&format!(r#""topic": "{}""#, topic))
+        map.push_str(&format!(r#""topic": "{}","#, topic))
     }
 
     if let Some(parent_id) = parent_id {

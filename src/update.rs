@@ -19,10 +19,18 @@ pub static COMMANDS: OnceLock<mpsc::Sender<(Command, Arc<Barrier>)>> = OnceLock:
 #[derive(Debug, Clone)]
 pub enum Command {
     AddFeed(Feed),
+    EditFeed(Message, String, EditArgs),
     RemoveFeed(Message, String),
     MarkRead(String, String),   // Channel name, item url
     MarkUnread(String, String), // Channel name, item url
     Exit,
+}
+
+#[derive(Debug, Clone, Default, Hash, PartialEq, Eq)]
+pub struct EditArgs {
+    pub category: Option<String>,
+    pub title: Option<String>,
+    pub url: Option<String>,
 }
 
 // Run in background, configuring server and updating feeds, etc
@@ -78,6 +86,58 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                                     }
                                 }},
                         };
+                        if let Err(e) = feed::export(&feeds).await {
+                            warn!("Failed to save feeds database: {}.", e);
+                        }
+                    },
+                    Command::EditFeed(msg, id, args) => {
+                        info!("Editing feed {}.", id);
+                        let channel_name = discord::title_to_channel_name(&id);
+                        let location = feeds.iter().enumerate().find_map(|(idx, feed)| {
+                            if discord::title_to_channel_name(feed.title()) == channel_name || feed.url() == id {
+                                Some(idx)
+                            } else {
+                                None
+                            }
+                        });
+
+                        if location.is_none() {
+                            if let Err(e) = msg.reply(&ctx, &format!("Feed {} not found", id)).await {
+                                error!("Failed to send message to {}: {}", msg.channel_id.0, e);
+                            }
+                            warn!("Could not feed {} to edit.", id);
+                            continue;
+                        }
+                        let location = location.unwrap();
+
+                        if let Some(url) = args.url {
+                            info!("Setting feed {} url to {}.", id, url);
+                            feeds[location].set_url(&url);
+                        }
+
+                        if let Some(category) = args.category {
+                            info!("Setting feed {} discord category to {}.", id, category);
+                            let category = if category == "None" {
+                                None
+                            } else {
+                                Some(category)
+                            };
+                            feeds[location].set_discord_category(&category);
+                        }
+                        // Easiest way is to remove the feed then add it again under the new title
+                        if discord::remove_feed(msg.clone(), &id, &feeds[location..=location], &ctx).await != Some(0) {
+                            if let Err(e) = msg.reply(&ctx, &format!("Feed {} not found", id)).await {
+                                error!("Failed to send message to {}: {}", msg.channel_id.0, e);
+                            }
+                            error!("Removing feed did not find feed {}.", id);
+                            continue;
+                        }
+
+                        if let Some(title) = args.title {
+                            feeds[location].set_title(&title);
+                        }
+
+                            discord::setup_channels(&feeds[location..=location], &ctx).await;
                     },
                     Command::RemoveFeed(msg, id) => {
                         info!("Removing feed {}", id);

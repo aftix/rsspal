@@ -171,8 +171,9 @@ pub async fn remove_feed(msg: Message, id: &str, feeds: &[Feed], ctx: &Context) 
                 id, channel_name, guild.0
             );
         }
-    }
 
+        remove_empty_categories(&guild, &channels, ctx).await;
+    }
     Some(location)
 }
 

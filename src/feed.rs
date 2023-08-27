@@ -62,11 +62,25 @@ impl Feed {
         }
     }
 
+    pub fn set_title(&mut self, title: impl Into<String>) {
+        match self {
+            Self::RSS(ref mut rss) => rss.channel.title = title.into(),
+            Self::ATOM(ref mut atom) => atom.title = title.into(),
+        };
+    }
+
     pub fn url(&self) -> String {
         match self {
             Self::RSS(rss) => rss.channel.url.clone(),
             Self::ATOM(atom) => atom.url.clone(),
         }
+    }
+
+    pub fn set_url(&mut self, url: impl Into<String>) {
+        match self {
+            Self::RSS(ref mut rss) => rss.channel.url = url.into(),
+            Self::ATOM(ref mut atom) => atom.url = url.into(),
+        };
     }
 
     pub fn should_update(&self) -> bool {
@@ -81,6 +95,13 @@ impl Feed {
             Self::RSS(rss) => rss.channel.discord_category.clone(),
             Self::ATOM(atom) => atom.discord_category.clone(),
         }
+    }
+
+    pub fn set_discord_category(&mut self, url: &Option<String>) {
+        match self {
+            Self::RSS(ref mut rss) => rss.channel.discord_category = url.clone(),
+            Self::ATOM(ref mut atom) => atom.discord_category = url.clone(),
+        };
     }
 }
 

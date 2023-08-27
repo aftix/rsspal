@@ -1,5 +1,9 @@
 use std::sync::{Arc, OnceLock};
 
+use regex::Regex;
+
+use lazy_static::lazy_static;
+
 use log::{debug, error, info, warn};
 
 use serenity::framework::standard::Args;
@@ -20,14 +24,14 @@ use serenity::prelude::*;
 use crate::config::Config;
 use crate::feed;
 use crate::signal::{send_termination, wait_for_termination};
-use crate::update::{background_task, Command, COMMANDS};
+use crate::update::{background_task, Command, EditArgs, COMMANDS};
 use crate::{discord, CONFIG};
 
 pub static GUILDS: OnceLock<Vec<GuildId>> = OnceLock::new();
 pub static USER_ID: OnceLock<UserId> = OnceLock::new();
 
 #[group]
-#[commands(ping, exit, add, remove, poll)]
+#[commands(ping, exit, add, remove, poll, edit)]
 pub struct Admin;
 
 pub struct Handler;
@@ -321,6 +325,164 @@ pub async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .await
     {
         error!("Failed to send command: {}", e);
+        match msg.reply(ctx, "Internal error").await {
+            Err(err) => {
+                error!(
+                    "Failed to send command: {} and reply to message {}: {}",
+                    e, msg.id.0, err
+                );
+                return Err(anyhow::anyhow!(
+                    "Failed to send command: {} and reply to message {}: {}",
+                    e,
+                    msg.id.0,
+                    err
+                )
+                .into());
+            }
+            Ok(_) => {
+                error!("Failed to send command: {}", e);
+                return Err(anyhow::anyhow!("Failed to send command: {}", e).into());
+            }
+        }
+    }
+
+    barrier.wait().await;
+    Ok(())
+}
+
+fn parse_edit_args(raw_args: &[String]) -> anyhow::Result<EditArgs> {
+    lazy_static! {
+        static ref SPACE_REGEX: Regex = Regex::new(r"\s+").unwrap();
+    }
+    let mut args = EditArgs::default();
+
+    for (idx, arg) in raw_args.iter().enumerate() {
+        let cleaned = SPACE_REGEX.replace_all(arg, "");
+        let parts: Vec<_> = cleaned.split('=').collect();
+        if parts.len() != 2 {
+            anyhow::bail!(
+                "Key value pair {} ({}) is not properly formatted. ({:?})",
+                arg,
+                idx,
+                parts
+            );
+        }
+
+        match parts[0].to_lowercase().as_ref() {
+            "title" => args.title = Some(parts[1].to_string()),
+            "category" => args.category = Some(parts[1].to_string()),
+            "url" | "link" => args.url = Some(parts[1].to_string()),
+            _ => warn!("Encountered unknown KEY for edit command: {}.", parts[0]),
+        }
+    }
+
+    Ok(args)
+}
+
+#[command]
+#[description("Edit feed. Keys are url, title, and category.")]
+#[usage("~edit <feed> <KEY=VALUE>...")]
+#[min_args(2)]
+pub async fn edit(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    info!("Recieved edit command.");
+    let id: String = match args.parse() {
+        Err(e) => match msg.reply(ctx, "Failed to parse first argument.").await {
+            Err(err) => {
+                warn!(
+                    "Failed to parse first argument to edit: {} and reply to message {}: {}",
+                    e, msg.id.0, err
+                );
+                return Err(anyhow::anyhow!(
+                    "Failed to parse first argument to edit: {} and reply to message {}: {}",
+                    e,
+                    msg.id.0,
+                    err
+                )
+                .into());
+            }
+            Ok(_) => {
+                warn!("Failed to parse first argumnet to edit: {}", e);
+                return Err(
+                    anyhow::anyhow!("Failed to parse first argumnet to edit: {}", e).into(),
+                );
+            }
+        },
+        Ok(s) => s,
+    };
+    args.advance();
+
+    debug!("Parsing edit arguments: {} ({}).", args.rest(), args.len());
+    let mut keyvals = Vec::with_capacity(args.len());
+    while !args.is_empty() {
+        let keyval: String = match args.parse() {
+            Err(e) => match msg.reply(ctx, "Failed to parse first argument.").await {
+                Err(err) => {
+                    warn!(
+                        "Failed to parse argument to edit: {} and reply to message {}: {}",
+                        e, msg.id.0, err
+                    );
+                    return Err(anyhow::anyhow!(
+                        "Failed to parse argument to edit: {} and reply to message {}: {}",
+                        e,
+                        msg.id.0,
+                        err
+                    )
+                    .into());
+                }
+                Ok(_) => {
+                    warn!("Failed to parse first argumnet to edit: {}", e);
+                    return Err(
+                        anyhow::anyhow!("Failed to parse first argumnet to edit: {}", e).into(),
+                    );
+                }
+            },
+            Ok(s) => s,
+        };
+        keyvals.push(keyval);
+        args.advance();
+    }
+
+    if keyvals.is_empty() {
+        match msg.reply(ctx, "No attributes given to edit.").await {
+            Err(e) => {
+                warn!(
+                    "No attributes given to edit and failed to reply to message {}: {}.",
+                    msg.id.0, e
+                );
+                return Err(anyhow::anyhow!(
+                    "No attributes given to edit and failed to reply to message {}: {}.",
+                    msg.id.0,
+                    e
+                )
+                .into());
+            }
+            Ok(_) => {
+                warn!("No attributes given to edit.");
+                return Err(anyhow::anyhow!("No attributes given to edit.").into());
+            }
+        }
+    }
+
+    let edit_args = match parse_edit_args(&keyvals) {
+        Err(e) => {
+            error!("Failed to parse the arguments to ~edit: {}.", e);
+            return Err(anyhow::anyhow!(e).into());
+        }
+        Ok(args) => args,
+    };
+
+    debug!("Edit args are {:?}.", edit_args);
+
+    let send = COMMANDS.get().expect("failed to get COMMANDS static");
+    let barrier = Arc::new(Barrier::new(2));
+    if let Err(e) = send
+        .send((
+            Command::EditFeed(msg.clone(), id, edit_args),
+            barrier.clone(),
+        ))
+        .await
+    {
+        error!("Failed to send on COMMANDS channel: {}", e);
         match msg.reply(ctx, "Internal error").await {
             Err(err) => {
                 error!(

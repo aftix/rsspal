@@ -1,5 +1,4 @@
 - add export/import feed list
-- add command to edit feed
 - add help command
 - add command to reload feed channel
 - Change to structured logging
