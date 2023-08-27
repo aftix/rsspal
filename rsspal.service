@@ -1,0 +1,15 @@
+[Unit]
+Description=Discord bot that turns a server into an RSS/Atom reader
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/rsspal.sh
+ExecStop=/usr/bin/pkill rsspal
+User=www-data
+WorkingDirectory=/mnt/www
+LoadCredentialEncrypted=token:/var/www/discord_token.cred
+Environment=TOKENPATH=%d/token
+
+[Install]
+WantedBy=multi-user.target
