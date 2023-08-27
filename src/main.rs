@@ -6,8 +6,6 @@ use serenity::prelude::*;
 use lazy_static::lazy_static;
 
 #[cfg(not(debug_assertions))]
-use log::LevelFilter;
-#[cfg(not(debug_assertions))]
 use systemd_journal_logger::JournalLog;
 
 mod admin_commands;
@@ -38,7 +36,6 @@ async fn main() -> anyhow::Result<()> {
         JournalLog::default()
             .install()
             .expect("Failed to initialize JournalLog");
-        log::set_max_level(LevelFilter::Info);
     }
 
     let token = match CONFIG.read() {
