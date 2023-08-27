@@ -32,8 +32,10 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
         .set(sender)
         .map_err(|_| anyhow::anyhow!("error setting COMMANDS"))?;
 
-    // Default to 10 minutes
-    let interval = CONFIG.get().map(|cfg| cfg.interval).unwrap_or(600);
+    let interval = match CONFIG.read() {
+        Err(_) => 600, // default to 10 minutes
+        Ok(cfg) => cfg.interval,
+    };
     let interval = Duration::from_secs(interval);
     let mut to_sleep = Instant::now()
         .checked_add(interval)
@@ -284,12 +286,6 @@ async fn update_feeds(feeds: &mut Vec<Feed>, ctx: &Context) {
 
 async fn exit_feeds_loop(feeds: Vec<Feed>) -> anyhow::Result<()> {
     debug!("Exiting the background loop");
-    {
-        let config = CONFIG
-            .get()
-            .ok_or_else(|| anyhow::anyhow!("could not get CONFIG"))?;
-        config.save()?;
-    }
 
     feed::export(&feeds)
         .await

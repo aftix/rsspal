@@ -1,6 +1,9 @@
+use std::sync::RwLock;
+
 use serenity::framework::StandardFramework;
 use serenity::prelude::*;
-use std::sync::OnceLock;
+
+use lazy_static::lazy_static;
 
 #[cfg(not(debug_assertions))]
 use log::LevelFilter;
@@ -17,7 +20,10 @@ mod feed;
 mod signal;
 mod update;
 
-static CONFIG: OnceLock<config::Config> = OnceLock::new();
+lazy_static! {
+    static ref CONFIG: RwLock<config::Config> =
+        RwLock::new(config::Config::new().unwrap_or_else(|e| panic!("{}", e)));
+}
 
 // Read the configuration, parse variables, and start discord client
 #[tokio::main]
@@ -34,10 +40,12 @@ async fn main() -> anyhow::Result<()> {
         log::set_max_level(LevelFilter::Info);
     }
 
-    let config =
-        config::Config::new().map_err(|e| anyhow::anyhow!("error reading config: {}", e))?;
-    let token = config.discord_token.clone();
-    CONFIG.get_or_init(move || config);
+    let token = match CONFIG.read() {
+        Err(e) => {
+            anyhow::bail!("Failed to read CONFIG: {}", e);
+        }
+        Ok(cfg) => cfg.discord_token.clone(),
+    };
 
     let framework = StandardFramework::new()
         .configure(|c| c.allow_dm(false))

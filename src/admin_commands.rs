@@ -3,6 +3,8 @@ use std::sync::{Arc, OnceLock};
 use log::{debug, error, info, warn};
 
 use serenity::framework::standard::Args;
+use tokio::fs::File;
+use tokio::io::AsyncReadExt;
 use tokio::sync::Barrier;
 use tokio::task::spawn;
 
@@ -15,16 +17,17 @@ use serenity::model::id::GuildId;
 use serenity::model::{gateway::Ready, prelude::*};
 use serenity::prelude::*;
 
-use crate::discord;
+use crate::config::Config;
 use crate::feed;
 use crate::signal::{send_termination, wait_for_termination};
 use crate::update::{background_task, Command, COMMANDS};
+use crate::{discord, CONFIG};
 
 pub static GUILDS: OnceLock<Vec<GuildId>> = OnceLock::new();
 pub static USER_ID: OnceLock<UserId> = OnceLock::new();
 
 #[group]
-#[commands(ping, exit, add, remove)]
+#[commands(ping, exit, add, remove, poll)]
 pub struct Admin;
 
 pub struct Handler;
@@ -341,4 +344,87 @@ pub async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
     barrier.wait().await;
     Ok(())
+}
+
+#[command]
+#[description("Set polling interval")]
+#[usage("~poll <seconds>")]
+#[num_args(1)]
+pub async fn poll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    info!("Recieved poll command.");
+    match args.parse::<u64>() {
+        Err(e) => {
+            match msg
+                .reply(ctx, "Argument must be an unsigned integer.")
+                .await
+            {
+                Err(err) => {
+                    error!("Failed to get new poll interval: {} and send error reply to message {}: {}", e, msg.id.0, err);
+                    Err(anyhow::anyhow!("Failed to get new poll interval: {} and send error reply to message {}: {}", e, msg.id.0, err).into())
+                }
+                Ok(_) => {
+                    error!("Failed to get new poll interval: {}", e);
+                    Err(anyhow::anyhow!("Failed to get new poll interval: {}", e).into())
+                }
+            }
+        }
+        Ok(interval) => {
+            let config_path = {
+                let mut config = match CONFIG.read() {
+                    Err(e) => {
+                        return Err(anyhow::anyhow!("Failed to read CONFIG static {}", e).into())
+                    }
+                    Ok(cfg) => cfg.clone(),
+                };
+                config.interval = interval;
+                let file = config.config_file.clone();
+                match CONFIG.write() {
+                    Err(e) => {
+                        return Err(anyhow::anyhow!("Failed to write CONFIG static {}", e).into())
+                    }
+                    Ok(mut cfg) => *cfg = config,
+                }
+                file
+            };
+
+            match File::open(&config_path).await {
+                Err(e) => {
+                    warn!("Could not open configuration file: {}", e);
+                    Err(anyhow::anyhow!("Could not open configuration file: {}", e).into())
+                }
+                Ok(mut f) => {
+                    let mut s = String::new();
+                    if let Err(e) = f.read_to_string(&mut s).await {
+                        warn!("Could not read configuration file: {}", e);
+                        return Err(
+                            anyhow::anyhow!("Could not read configuration file: {}", e).into()
+                        );
+                    }
+
+                    let mut cfg: Config = match toml::from_str(&s) {
+                        Err(e) => {
+                            warn!("Could not deserialize configuration file: {}", e);
+                            return Err(anyhow::anyhow!(
+                                "Could not deserialize configuration file: {}",
+                                e
+                            )
+                            .into());
+                        }
+                        Ok(c) => c,
+                    };
+
+                    cfg.interval = interval;
+                    cfg.config_file = config_path;
+
+                    match cfg.save() {
+                        Ok(_) => Ok(()),
+                        Err(e) => {
+                            warn!("Error saving configuration file: {}", e);
+                            Err(anyhow::anyhow!("Error saving configuration file: {}", e).into())
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

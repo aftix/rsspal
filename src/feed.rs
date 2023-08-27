@@ -14,9 +14,9 @@ use atom::AtomFeed;
 use rss::RssFeed;
 
 pub async fn import() -> anyhow::Result<Vec<Feed>> {
-    let db_path = {
-        let cfg = CONFIG.get().expect("failed to get CONFIG");
-        cfg.data_dir.join("database.json")
+    let db_path = match CONFIG.read() {
+        Err(e) => anyhow::bail!("error reading CONFIG static: {}", e),
+        Ok(cfg) => cfg.data_dir.join("database.json"),
     };
 
     info!("Loading database from {:?}", db_path);
@@ -30,9 +30,9 @@ pub async fn import() -> anyhow::Result<Vec<Feed>> {
 }
 
 pub async fn export(feeds: &Vec<Feed>) -> anyhow::Result<()> {
-    let db_path = {
-        let cfg = CONFIG.get().expect("failed to get CONFIG");
-        cfg.data_dir.join("database.json")
+    let db_path = match CONFIG.read() {
+        Err(e) => anyhow::bail!("error reading CONFIG static: {}", e),
+        Ok(cfg) => cfg.data_dir.join("database.json"),
     };
 
     info!("Writing database to {:?}", db_path);

@@ -32,7 +32,7 @@ struct Args {
     interval: Option<u64>,
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
     #[serde(skip, default)]
@@ -69,18 +69,18 @@ fn get_data_dir() -> PathBuf {
 pub fn get_config_path() -> PathBuf {
     let xdg_config_dir = env::var("XDG_CONFIG_HOME");
     if let Ok(dir) = xdg_config_dir {
-        let path = PathBuf::from(dir).join("rsspal");
+        let path = PathBuf::from(dir).join("rsspal/config.toml");
         return path;
     }
 
     let home = env::var("HOME");
     if let Ok(dir) = home {
-        let path = PathBuf::from(dir).join(".rsspal");
+        let path = PathBuf::from(dir).join(".rsspal/config.toml");
         return path;
     }
 
     let cwd = env::current_dir().expect("Can not access current directory");
-    PathBuf::from(cwd)
+    PathBuf::from(cwd.join("config.toml"))
 }
 
 impl Config {
