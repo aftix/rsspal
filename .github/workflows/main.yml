@@ -8,6 +8,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  checks: write
+
 jobs:
   build:
     name: Build rsspal
@@ -32,9 +35,6 @@ jobs:
 
   clippy:
     name: Cargo clippy
-    strategy:
-      matrix:
-        profile: [dev, release]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -47,11 +47,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Run Clippy
-        uses: auguwu/clippy-action@v2
+        uses: auguwu/clippy-action@1.2.2
         with:
           all-features: true
           deny: warnings
-          args: --profile ${{ matrix.profile }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
   test:
@@ -66,12 +65,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Install cargo-nextest
-        uses: baptise0928/cargo-install@v2
+        uses: baptiste0928/cargo-install@v2
         with:
           crate: cargo-nextest
 
       - name: Run tests
-        uses: clechhasseur/rs-cargo@v1
+        uses: clechasseur/rs-cargo@v1
         with:
           command: nextest
           args: run
