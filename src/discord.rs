@@ -256,7 +256,8 @@ pub async fn publish_atom_entry(
     ctx: &Context,
 ) -> anyhow::Result<()> {
     info!("Publishing item {} to feed {}", entry.title, feed_name);
-    let channel_name = if entry.read.is_some() {
+    debug!("{:?}", entry);
+    let channel_name = if entry.read.is_none() {
         title_to_channel_name(feed_name)
     } else {
         format!("read-{}", &title_to_channel_name(feed_name))
@@ -274,7 +275,13 @@ pub async fn publish_atom_entry(
     let embed_cb = entry.to_embed();
 
     for guild in guilds {
-        let channels = guild.channels(ctx).await?;
+        let mut channels = guild.channels(ctx).await?;
+        match guild.get_active_threads(ctx).await {
+            Err(e) => warn!("Failed to get active threads in {}: {}", guild.0, e),
+            Ok(threads) => {
+                channels.extend(threads.threads.into_iter().map(|c| (c.id, c)));
+            }
+        }
         let to_publish = channels.iter().find_map(|(_, c)| {
             if c.name == channel_name {
                 Some(c)
@@ -282,10 +289,11 @@ pub async fn publish_atom_entry(
                 None
             }
         });
+
         if let Some(channel) = to_publish {
             info!(
-                "Publishing item {}, feed {}, on guild {}.",
-                entry.title, feed_name, guild.0
+                "Publishing item {}, feed {}, on guild {}, channel {}.",
+                entry.title, feed_name, guild.0, channel.id.0
             );
             let msg = channel
                 .send_message(ctx, |msg| msg.embed(&embed_cb))
@@ -324,7 +332,13 @@ pub async fn publish_rss_item(
     let embed_cb = item.to_embed();
 
     for guild in guilds {
-        let channels = guild.channels(ctx).await?;
+        let mut channels = guild.channels(ctx).await?;
+        match guild.get_active_threads(ctx).await {
+            Err(e) => warn!("Failed to get active threads in {}: {}", guild.0, e),
+            Ok(threads) => {
+                channels.extend(threads.threads.into_iter().map(|c| (c.id, c)));
+            }
+        }
         let to_publish = channels.iter().find_map(|(_, c)| {
             if c.name == channel_name {
                 Some(c)

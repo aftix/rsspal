@@ -1,0 +1,711 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+ <link rel="self" href="http://www.youtube.com/feeds/videos.xml?channel_id=UC8ENHE5xdFSwx71u3fDH5Xw"/>
+ <id>yt:channel:</id>
+ <yt:channelId></yt:channelId>
+ <title>ThePrimeagen</title>
+ <link rel="alternate" href="https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw"/>
+ <author>
+  <name>ThePrimeagen</name>
+  <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+ </author>
+ <published>2018-05-07T16:46:32+00:00</published>
+ <entry>
+  <id>yt:video:6jPiuOXmxEc</id>
+  <yt:videoId>6jPiuOXmxEc</yt:videoId>
+  <yt:channelId>UC8ENHE5xdFSwx71u3fDH5Xw</yt:channelId>
+  <title>What You Need To Learn 2023 (as a software engineer)</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=6jPiuOXmxEc"/>
+  <author>
+   <name>ThePrimeagen</name>
+   <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+  </author>
+  <published>2023-08-03T14:09:29+00:00</published>
+  <updated>2023-08-04T07:56:33+00:00</updated>
+  <media:group>
+   <media:title>What You Need To Learn 2023 (as a software engineer)</media:title>
+   <media:content url="https://www.youtube.com/v/6jPiuOXmxEc?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i3.ytimg.com/vi/6jPiuOXmxEc/hqdefault.jpg" width="480" height="360"/>
+   <media:description>### Twitch
+Everything is built live on twitch
+Twitch : https://bit.ly/3xhFO3E
+Discord: discord.gg/ThePrimeagen
+Spotify DevHour: https://open.spotify.com/show/4MLaDrQcQ5mi3rsnvWkwPt
+### Editor
+All my videos are edited by Flip.  Give him a follow!  https://twitter.com/flipmediaprod  
+
+Join this channel to get access to perks:
+https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw/join
+
+### Links
+Linode: https://linode.com/prime
+https://discord.gg/ThePrimeagen
+Twitch: https://twitch.tv/ThePrimeagen
+Insta: https://instagram.com/ThePrimeagen
+Twitter: https://twitter.com/ThePrimeagen
+VimRC &amp; i3: https://github.com/ThePrimeagen/.dotfiles
+Keyboard 15% off https://bit.ly/Prime360 USE CODE PRIME360  
+
+#coding #neovim  #typescript  #programming #vim #softwareengineering #codinglife #webdesign #webdevelopment #webdev #javascript #rustlang #rust #twitch #twitchstreamer #programmerhumor #codinghumor #software #softwareengineer #softwaredeveloper #softwaredevelopment</media:description>
+   <media:community>
+    <media:starRating count="5151" average="5.00" min="1" max="5"/>
+    <media:statistics views="93014"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:o462tY758CY</id>
+  <yt:videoId>o462tY758CY</yt:videoId>
+  <yt:channelId>UC8ENHE5xdFSwx71u3fDH5Xw</yt:channelId>
+  <title>I Fixed Git</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=o462tY758CY"/>
+  <author>
+   <name>ThePrimeagen</name>
+   <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+  </author>
+  <published>2023-07-26T14:22:13+00:00</published>
+  <updated>2023-08-02T00:51:23+00:00</updated>
+  <media:group>
+   <media:title>I Fixed Git</media:title>
+   <media:content url="https://www.youtube.com/v/o462tY758CY?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i4.ytimg.com/vi/o462tY758CY/hqdefault.jpg" width="480" height="360"/>
+   <media:description>Finally Git will be fixed.  We never have to worry about Git being the way it is with these changes and you can finally sleep assured that your life will be easier.
+
+### TELL ME WHAT YOU HATE ABOUT C++ AND WE WILL FIX IT
+https://twitter.com/ThePrimeagen/status/1684206940086206466
+
+### Live on Twitch
+Twitch : https://bit.ly/3xhFO3E
+
+### Degens Here
+Discord: discord.gg/ThePrimeagen
+Spotify DevHour: https://open.spotify.com/show/4MLaDrQcQ5mi3rsnvWkwPt
+### Editor
+All my videos are edited by Flip.  Give him a follow!  https://twitter.com/flipmediaprod  
+
+Join this channel to get access to perks:
+https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw/join
+
+### Links
+Linode: https://linode.com/prime
+https://discord.gg/ThePrimeagen
+Twitch: https://twitch.tv/ThePrimeagen
+Insta: https://instagram.com/ThePrimeagen
+Twitter: https://twitter.com/ThePrimeagen
+VimRC &amp; i3: https://github.com/ThePrimeagen/.dotfiles
+Keyboard 15% off https://bit.ly/Prime360 USE CODE PRIME360  
+
+#coding #neovim  #typescript  #programming #vim #softwareengineering #codinglife #webdesign #webdevelopment #webdev #javascript #rustlang #rust #twitch #twitchstreamer #programmerhumor #codinghumor #software #softwareengineer #softwaredeveloper #softwaredevelopment</media:description>
+   <media:community>
+    <media:starRating count="4403" average="5.00" min="1" max="5"/>
+    <media:statistics views="64851"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:E8cM12jRH7k</id>
+  <yt:videoId>E8cM12jRH7k</yt:videoId>
+  <yt:channelId>UC8ENHE5xdFSwx71u3fDH5Xw</yt:channelId>
+  <title>How To Learn A New Programming Language</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=E8cM12jRH7k"/>
+  <author>
+   <name>ThePrimeagen</name>
+   <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+  </author>
+  <published>2023-06-03T14:36:32+00:00</published>
+  <updated>2023-06-13T05:59:37+00:00</updated>
+  <media:group>
+   <media:title>How To Learn A New Programming Language</media:title>
+   <media:content url="https://www.youtube.com/v/E8cM12jRH7k?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i2.ytimg.com/vi/E8cM12jRH7k/hqdefault.jpg" width="480" height="360"/>
+   <media:description>As a 20 Year veteran of the HTML programming language here is my guide to learning a language quickly.
+
+Are you ready to take your programming skills to the next level? s a 20 Year veteran of the HTML programming language here is my guide to learning a language quickly. Here are a few techniques in this essential video tutorial that have worked for me and can help you to start coding like a pro today. 
+
+### Twitch
+Everything is built live on twitch
+Twitch : https://bit.ly/3xhFO3E
+Discord: discord.gg/ThePrimeagen
+Spotify DevHour: https://open.spotify.com/show/4MLaDrQcQ5mi3rsnvWkwPt
+### Editor
+All my videos are edited by Flip.  Give him a follow!  https://twitter.com/flipmediaprod  
+
+Join this channel to get access to perks:
+https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw/join
+
+### Links
+Linode: https://linode.com/prime
+https://discord.gg/ThePrimeagen
+Twitch: https://twitch.tv/ThePrimeagen
+Insta: https://instagram.com/ThePrimeagen
+Twitter: https://twitter.com/ThePrimeagen
+VimRC &amp; i3: https://github.com/ThePrimeagen/.dotfiles
+Keyboard 15% off https://bit.ly/Prime360 USE CODE PRIME360  
+
+#coding #neovim  #typescript  #programming #vim #softwareengineering #codinglife #webdesign #webdevelopment #webdev #javascript #rustlang #rust #twitch #twitchstreamer #programmerhumor #codinghumor #software #softwareengineer #softwaredeveloper #softwaredevelopment</media:description>
+   <media:community>
+    <media:starRating count="7709" average="5.00" min="1" max="5"/>
+    <media:statistics views="154745"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:VU1h-h9doS8</id>
+  <yt:videoId>VU1h-h9doS8</yt:videoId>
+  <yt:channelId>UC8ENHE5xdFSwx71u3fDH5Xw</yt:channelId>
+  <title>Using Zig | My Initial Thoughts on Ziglang</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=VU1h-h9doS8"/>
+  <author>
+   <name>ThePrimeagen</name>
+   <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+  </author>
+  <published>2023-05-30T12:12:05+00:00</published>
+  <updated>2023-06-17T04:09:32+00:00</updated>
+  <media:group>
+   <media:title>Using Zig | My Initial Thoughts on Ziglang</media:title>
+   <media:content url="https://www.youtube.com/v/VU1h-h9doS8?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i3.ytimg.com/vi/VU1h-h9doS8/hqdefault.jpg" width="480" height="360"/>
+   <media:description>All of the learnings were done on twitch where i build a stack data structure (planning on doing more) and going through and building an interpreter.  We are just finishing up the extended lexer grammar and then we are on to the parser (at the time of this comment)! 
+
+### Twitch
+Everything is built live on twitch
+Twitch : https://bit.ly/3xhFO3E
+Discord: discord.gg/ThePrimeagen
+Spotify DevHour: https://open.spotify.com/show/4MLaDrQcQ5mi3rsnvWkwPt
+### Editor
+All my videos are edited by Flip.  Give him a follow!  https://twitter.com/flipmediaprod  
+
+Join this channel to get access to perks:
+https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw/join
+
+### Links
+Linode: https://linode.com/prime
+https://discord.gg/ThePrimeagen
+Twitch: https://twitch.tv/ThePrimeagen
+Insta: https://instagram.com/ThePrimeagen
+Twitter: https://twitter.com/ThePrimeagen
+VimRC &amp; i3: https://github.com/ThePrimeagen/.dotfiles
+Keyboard 15% off https://bit.ly/Prime360 USE CODE PRIME360  
+
+#coding #neovim  #typescript  #programming #vim #softwareengineering #codinglife #webdesign #webdevelopment #webdev #javascript #rustlang #rust #twitch #twitchstreamer #programmerhumor #codinghumor #software #softwareengineer #softwaredeveloper #softwaredevelopment</media:description>
+   <media:community>
+    <media:starRating count="5151" average="5.00" min="1" max="5"/>
+    <media:statistics views="162108"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:TB0cXGvuw9A</id>
+  <yt:videoId>TB0cXGvuw9A</yt:videoId>
+  <yt:channelId>UC8ENHE5xdFSwx71u3fDH5Xw</yt:channelId>
+  <title>Stepping Down From RustConf and Rust Project Controversy</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=TB0cXGvuw9A"/>
+  <author>
+   <name>ThePrimeagen</name>
+   <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+  </author>
+  <published>2023-05-27T19:01:18+00:00</published>
+  <updated>2023-07-04T20:04:03+00:00</updated>
+  <media:group>
+   <media:title>Stepping Down From RustConf and Rust Project Controversy</media:title>
+   <media:content url="https://www.youtube.com/v/TB0cXGvuw9A?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i1.ytimg.com/vi/TB0cXGvuw9A/hqdefault.jpg" width="480" height="360"/>
+   <media:description>Björkus &quot;Fix It Or Die Trying&quot; Dorkus has stepped down from rust conf 2023 this year.  I read the article on twitch and here is my thoughts.
+
+Please read it yourself and show some support and love to Björkus
+https://thephd.dev/i-am-no-longer-speaking-at-rustconf-2023
+
+
+### Twitch
+Everything is built live on twitch
+Twitch : https://bit.ly/3xhFO3E
+Discord: discord.gg/ThePrimeagen
+Spotify DevHour: https://open.spotify.com/show/4MLaDrQcQ5mi3rsnvWkwPt
+### Editor
+All my videos are edited by Flip.  Give him a follow!  https://twitter.com/flipmediaprod  
+
+Join this channel to get access to perks:
+https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw/join
+
+### Links
+Linode: https://linode.com/prime
+https://discord.gg/ThePrimeagen
+Twitch: https://twitch.tv/ThePrimeagen
+Insta: https://instagram.com/ThePrimeagen
+Twitter: https://twitter.com/ThePrimeagen
+VimRC &amp; i3: https://github.com/ThePrimeagen/.dotfiles
+Keyboard 15% off https://bit.ly/Prime360 USE CODE PRIME360  
+
+#coding #neovim  #typescript  #programming #vim #softwareengineering #codinglife #webdesign #webdevelopment #webdev #javascript #rustlang #rust #twitch #twitchstreamer #programmerhumor #codinghumor #software #softwareengineer #softwaredeveloper #softwaredevelopment</media:description>
+   <media:community>
+    <media:starRating count="3559" average="5.00" min="1" max="5"/>
+    <media:statistics views="89130"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:PHvbLmLPX6s</id>
+  <yt:videoId>PHvbLmLPX6s</yt:videoId>
+  <yt:channelId>UC8ENHE5xdFSwx71u3fDH5Xw</yt:channelId>
+  <title>This Lesson Taught Me How To Do Better Benchmarks</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=PHvbLmLPX6s"/>
+  <author>
+   <name>ThePrimeagen</name>
+   <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+  </author>
+  <published>2023-05-19T14:00:27+00:00</published>
+  <updated>2023-06-11T19:32:16+00:00</updated>
+  <media:group>
+   <media:title>This Lesson Taught Me How To Do Better Benchmarks</media:title>
+   <media:content url="https://www.youtube.com/v/PHvbLmLPX6s?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i1.ytimg.com/vi/PHvbLmLPX6s/hqdefault.jpg" width="480" height="360"/>
+   <media:description>This benchmark was HORRIBLE but once I pushed it to the server, something WILD happened instead. 
+
+### Twitch
+Everything is built live on twitch
+Twitch : https://bit.ly/3xhFO3E
+Discord: discord.gg/ThePrimeagen
+Spotify DevHour: https://open.spotify.com/show/4MLaDrQcQ5mi3rsnvWkwPt
+### Editor
+All my videos are edited by Flip.  Give him a follow!  https://twitter.com/flipmediaprod  
+
+Join this channel to get access to perks:
+https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw/join
+
+### Links
+Linode: https://linode.com/prime
+https://discord.gg/ThePrimeagen
+Twitch: https://twitch.tv/ThePrimeagen
+Insta: https://instagram.com/ThePrimeagen
+Twitter: https://twitter.com/ThePrimeagen
+VimRC &amp; i3: https://github.com/ThePrimeagen/.dotfiles
+Keyboard 15% off https://bit.ly/Prime360 USE CODE PRIME360  
+
+#coding #neovim  #typescript  #programming #vim #softwareengineering #codinglife #webdesign #webdevelopment #webdev #javascript #rustlang #rust #twitch #twitchstreamer #programmerhumor #codinghumor #software #softwareengineer #softwaredeveloper #softwaredevelopment</media:description>
+   <media:community>
+    <media:starRating count="5507" average="5.00" min="1" max="5"/>
+    <media:statistics views="50936"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:gutR_LNoZw0</id>
+  <yt:videoId>gutR_LNoZw0</yt:videoId>
+  <yt:channelId>UC8ENHE5xdFSwx71u3fDH5Xw</yt:channelId>
+  <title>Rust Foundation IS DOING WHAT????</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=gutR_LNoZw0"/>
+  <author>
+   <name>ThePrimeagen</name>
+   <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+  </author>
+  <published>2023-04-10T22:00:17+00:00</published>
+  <updated>2023-06-08T06:37:41+00:00</updated>
+  <media:group>
+   <media:title>Rust Foundation IS DOING WHAT????</media:title>
+   <media:content url="https://www.youtube.com/v/gutR_LNoZw0?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i4.ytimg.com/vi/gutR_LNoZw0/hqdefault.jpg" width="480" height="360"/>
+   <media:description>The new proposed trademark policy of the rust foundation is absolutely nuts, lets go over it
+
+https://twitter.com/rust_foundation/status/1644132378858729474
+
+### Twitch
+Everything is built live on twitch
+Twitch : https://bit.ly/3xhFO3E
+Discord: discord.gg/ThePrimeagen
+Spotify DevHour: https://open.spotify.com/show/4MLaDrQcQ5mi3rsnvWkwPt
+### Editor
+All my videos are edited by Flip.  Give him a follow!  https://twitter.com/flipmediaprod  He is also open to do more editing, so slide deeeeeeeeep into his dms.
+
+Join this channel to get access to perks:
+https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw/join
+
+### Links
+Linode: https://linode.com/prime
+https://discord.gg/ThePrimeagen
+Twitch: https://twitch.tv/ThePrimeagen
+Insta: https://instagram.com/ThePrimeagen
+Twitter: https://twitter.com/ThePrimeagen
+VimRC &amp; i3: https://github.com/ThePrimeagen/.dotfiles
+Keyboard 15% off https://bit.ly/Prime360 USE CODE PRIME360  
+
+#coding #neovim  #typescript  #programming #vim #softwareengineering #codinglife #webdesign #webdevelopment #webdev #javascript #rustlang #rust #twitch #twitchstreamer #programmerhumor #codinghumor #software #softwareengineer #softwaredeveloper #softwaredevelopment</media:description>
+   <media:community>
+    <media:starRating count="15028" average="5.00" min="1" max="5"/>
+    <media:statistics views="291232"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:2gG08VUuwzg</id>
+  <yt:videoId>2gG08VUuwzg</yt:videoId>
+  <yt:channelId>UC8ENHE5xdFSwx71u3fDH5Xw</yt:channelId>
+  <title>Twitter's Algorithm Has MASSIVE Problems</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=2gG08VUuwzg"/>
+  <author>
+   <name>ThePrimeagen</name>
+   <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+  </author>
+  <published>2023-04-03T03:02:43+00:00</published>
+  <updated>2023-06-08T17:42:35+00:00</updated>
+  <media:group>
+   <media:title>Twitter's Algorithm Has MASSIVE Problems</media:title>
+   <media:content url="https://www.youtube.com/v/2gG08VUuwzg?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i3.ytimg.com/vi/2gG08VUuwzg/hqdefault.jpg" width="480" height="360"/>
+   <media:description>Twitter's Algorithm went Open-Source on GitHub...and it might just be the worst idea ever so Prime is here to react to it. Overdramatically. In the best way possible. 
+
+### Twitch
+Everything is built live on twitch
+Twitch : https://bit.ly/3xhFO3E
+Discord: discord.gg/ThePrimeagen
+Spotify DevHour: https://open.spotify.com/show/4MLaDrQcQ5mi3rsnvWkwPt
+### Editor
+All my videos are edited by Flip.  Give him a follow!  https://twitter.com/flipmediaprod  He is also open to do more editing, so slide deeeeeeeeep into his dms.
+
+Join this channel to get access to perks:
+https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw/join
+
+### Links
+Linode: https://linode.com/prime
+https://discord.gg/ThePrimeagen
+Twitch: https://twitch.tv/ThePrimeagen
+Insta: https://instagram.com/ThePrimeagen
+Twitter: https://twitter.com/ThePrimeagen
+VimRC &amp; i3: https://github.com/ThePrimeagen/.dotfiles
+Keyboard 15% off https://bit.ly/Prime360 USE CODE PRIME360  
+
+#coding #neovim  #typescript  #programming #vim #softwareengineering #codinglife #webdesign #webdevelopment #webdev #javascript #rustlang #rust #twitch #twitchstreamer #programmerhumor #codinghumor #software #softwareengineer #softwaredeveloper #softwaredevelopment</media:description>
+   <media:community>
+    <media:starRating count="9301" average="5.00" min="1" max="5"/>
+    <media:statistics views="171099"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:FrMRyXtiJkc</id>
+  <yt:videoId>FrMRyXtiJkc</yt:videoId>
+  <yt:channelId>UC8ENHE5xdFSwx71u3fDH5Xw</yt:channelId>
+  <title>How to Vim in 2023: Tips and Tricks</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=FrMRyXtiJkc"/>
+  <author>
+   <name>ThePrimeagen</name>
+   <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+  </author>
+  <published>2023-03-31T12:45:24+00:00</published>
+  <updated>2023-06-08T09:53:44+00:00</updated>
+  <media:group>
+   <media:title>How to Vim in 2023: Tips and Tricks</media:title>
+   <media:content url="https://www.youtube.com/v/FrMRyXtiJkc?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i3.ytimg.com/vi/FrMRyXtiJkc/hqdefault.jpg" width="480" height="360"/>
+   <media:description>This is not another tutorial on how to do some key combos or how to install plugins, its about _using_ the plugins and everything together to have a complete experience!  I hope you enjoyed it!
+
+### Twitch
+Everything is built live on twitch
+Twitch : https://bit.ly/3xhFO3E
+Discord: discord.gg/ThePrimeagen
+Spotify DevHour: https://open.spotify.com/show/4MLaDrQcQ5mi3rsnvWkwPt
+### Editor
+All my videos are edited by Flip.  Give him a follow!  https://twitter.com/flipmediaprod  He is also open to do more editing, so slide deeeeeeeeep into his dms.
+
+Join this channel to get access to perks:
+https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw/join
+
+### Links
+Linode: https://linode.com/prime
+https://discord.gg/ThePrimeagen
+Twitch: https://twitch.tv/ThePrimeagen
+Insta: https://instagram.com/ThePrimeagen
+Twitter: https://twitter.com/ThePrimeagen
+VimRC &amp; i3: https://github.com/ThePrimeagen/.dotfiles
+Keyboard 15% off https://bit.ly/Prime360 USE CODE PRIME360  
+
+#coding #neovim  #typescript  #programming #vim #softwareengineering #codinglife #webdesign #webdevelopment #webdev #javascript #rustlang #rust #twitch #twitchstreamer #programmerhumor #codinghumor #software #softwareengineer #softwaredeveloper #softwaredevelopment</media:description>
+   <media:community>
+    <media:starRating count="10123" average="5.00" min="1" max="5"/>
+    <media:statistics views="236178"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:RDd71IUIgpg</id>
+  <yt:videoId>RDd71IUIgpg</yt:videoId>
+  <yt:channelId>UC8ENHE5xdFSwx71u3fDH5Xw</yt:channelId>
+  <title>CoPilot Review: My Thoughts After 6 Months</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=RDd71IUIgpg"/>
+  <author>
+   <name>ThePrimeagen</name>
+   <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+  </author>
+  <published>2023-02-24T20:09:06+00:00</published>
+  <updated>2023-07-22T23:01:31+00:00</updated>
+  <media:group>
+   <media:title>CoPilot Review: My Thoughts After 6 Months</media:title>
+   <media:content url="https://www.youtube.com/v/RDd71IUIgpg?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i3.ytimg.com/vi/RDd71IUIgpg/hqdefault.jpg" width="480" height="360"/>
+   <media:description>I've been using CoPilot for 6 months now, and I wanted to share my thoughts on it. It's a great coding tool, but there are some shortcomings.
+
+### Twitch
+Everything is built live on twitch
+Twitch : https://bit.ly/3xhFO3E
+Discord: discord.gg/ThePrimeagen
+Spotify DevHour: https://open.spotify.com/show/4MLaDrQcQ5mi3rsnvWkwPt
+### Editor
+All my videos are edited by Flip.  Give him a follow!  https://twitter.com/flipmediaprod  He is also open to do more editing, so slide deeeeeeeeep into his dms.
+
+Join this channel to get access to perks:
+https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw/join
+
+### Links
+Linode: https://linode.com/prime
+https://discord.gg/ThePrimeagen
+Twitch: https://twitch.tv/ThePrimeagen
+Insta: https://instagram.com/ThePrimeagen
+Twitter: https://twitter.com/ThePrimeagen
+VimRC &amp; i3: https://github.com/ThePrimeagen/.dotfiles
+Keyboard 15% off https://bit.ly/Prime360 USE CODE PRIME360  
+
+#coding #neovim  #typescript  #programming #vim #softwareengineering #codinglife #webdesign #webdevelopment #webdev #javascript #rustlang #rust #twitch #twitchstreamer #programmerhumor #codinghumor #software #softwareengineer #softwaredeveloper #softwaredevelopment</media:description>
+   <media:community>
+    <media:starRating count="15205" average="5.00" min="1" max="5"/>
+    <media:statistics views="431696"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:Epwlk4B90vk</id>
+  <yt:videoId>Epwlk4B90vk</yt:videoId>
+  <yt:channelId>UC8ENHE5xdFSwx71u3fDH5Xw</yt:channelId>
+  <title>RUST Enums ARE Better</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=Epwlk4B90vk"/>
+  <author>
+   <name>ThePrimeagen</name>
+   <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+  </author>
+  <published>2023-02-13T19:29:13+00:00</published>
+  <updated>2023-06-08T06:34:05+00:00</updated>
+  <media:group>
+   <media:title>RUST Enums ARE Better</media:title>
+   <media:content url="https://www.youtube.com/v/Epwlk4B90vk?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i2.ytimg.com/vi/Epwlk4B90vk/hqdefault.jpg" width="480" height="360"/>
+   <media:description>RUST does ENUMS better than Typescript and that’s a fact, no matter what they say.
+
+### Twitch
+Everything is built live on twitch
+Twitch : https://bit.ly/3xhFO3E
+Discord: discord.gg/ThePrimeagen
+Spotify DevHour: https://open.spotify.com/show/4MLaDrQcQ5mi3rsnvWkwPt
+### Editor
+All my videos are edited by Flip.  Give him a follow!  https://twitter.com/flipmediaprod  He is also open to do more editing, so slide deeeeeeeeep into his dms.
+
+Join this channel to get access to perks:
+https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw/join
+
+### Links
+Linode: https://linode.com/prime
+https://discord.gg/ThePrimeagen
+Twitch: https://twitch.tv/ThePrimeagen
+Insta: https://instagram.com/ThePrimeagen
+Twitter: https://twitter.com/ThePrimeagen
+VimRC &amp; i3: https://github.com/ThePrimeagen/.dotfiles
+Keyboard 15% off https://bit.ly/Prime360 USE CODE PRIME360  
+
+#coding #neovim  #typescript  #programming #vim #softwareengineering #codinglife #webdesign #webdevelopment #webdev #javascript #rustlang #rust #twitch #twitchstreamer #programmerhumor #codinghumor #software #softwareengineer #softwaredeveloper #softwaredevelopment #ruststring</media:description>
+   <media:community>
+    <media:starRating count="7465" average="5.00" min="1" max="5"/>
+    <media:statistics views="113819"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:TTjYjSEGHek</id>
+  <yt:videoId>TTjYjSEGHek</yt:videoId>
+  <yt:channelId>UC8ENHE5xdFSwx71u3fDH5Xw</yt:channelId>
+  <title>JSON, I hardly know 'er</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=TTjYjSEGHek"/>
+  <author>
+   <name>ThePrimeagen</name>
+   <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+  </author>
+  <published>2023-02-03T14:12:21+00:00</published>
+  <updated>2023-06-10T20:42:38+00:00</updated>
+  <media:group>
+   <media:title>JSON, I hardly know 'er</media:title>
+   <media:content url="https://www.youtube.com/v/TTjYjSEGHek?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i1.ytimg.com/vi/TTjYjSEGHek/hqdefault.jpg" width="480" height="360"/>
+   <media:description>### Twitch
+Everything is built live on twitch
+Twitch : https://bit.ly/3xhFO3E
+Discord: discord.gg/ThePrimeagen
+Spotify DevHour: https://open.spotify.com/show/4MLaDrQcQ5mi3rsnvWkwPt
+### Editor
+All my videos are edited by Flip.  Give him a follow!  https://twitter.com/flipmediaprod  He is also open to do more editing, so slide deeeeeeeeep into his dms.
+
+Join this channel to get access to perks:
+https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw/join
+
+### Links
+Linode: https://linode.com/prime
+https://discord.gg/ThePrimeagen
+Twitch: https://twitch.tv/ThePrimeagen
+Insta: https://instagram.com/ThePrimeagen
+Twitter: https://twitter.com/ThePrimeagen
+VimRC &amp; i3: https://github.com/ThePrimeagen/.dotfiles
+Keyboard 15% off https://bit.ly/Prime360 USE CODE PRIME360  
+
+#coding #neovim  #typescript  #programming #vim #softwareengineering #codinglife #webdesign #webdevelopment #webdev #javascript #rustlang #rust #twitch #twitchstreamer #programmerhumor #codinghumor #software #softwareengineer #softwaredeveloper #softwaredevelopment</media:description>
+   <media:community>
+    <media:starRating count="14203" average="5.00" min="1" max="5"/>
+    <media:statistics views="153807"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:ReeLQR7KCcM</id>
+  <yt:videoId>ReeLQR7KCcM</yt:videoId>
+  <yt:channelId>UC8ENHE5xdFSwx71u3fDH5Xw</yt:channelId>
+  <title>What Next...Finding a New Job In Software</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=ReeLQR7KCcM"/>
+  <author>
+   <name>ThePrimeagen</name>
+   <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+  </author>
+  <published>2023-01-27T20:06:25+00:00</published>
+  <updated>2023-06-11T07:22:25+00:00</updated>
+  <media:group>
+   <media:title>What Next...Finding a New Job In Software</media:title>
+   <media:content url="https://www.youtube.com/v/ReeLQR7KCcM?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i3.ytimg.com/vi/ReeLQR7KCcM/hqdefault.jpg" width="480" height="360"/>
+   <media:description>As a Netflix Developer, my job is fairly secure but in this video I wanted to give my best tips on how to get a job in tech or get rehired! 
+
+### Twitch
+Everything is built live on twitch
+Twitch : https://bit.ly/3xhFO3E
+Discord: discord.gg/ThePrimeagen
+Spotify DevHour: https://open.spotify.com/show/4MLaDrQcQ5mi3rsnvWkwPt
+### Editor
+All my videos are edited by Flip.  Give him a follow!  https://twitter.com/flipmediaprod  He is also open to do more editing, so slide deeeeeeeeep into his dms.
+
+Join this channel to get access to perks:
+https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw/join
+
+### Links
+Linode: https://linode.com/prime
+https://discord.gg/ThePrimeagen
+Twitch: https://twitch.tv/ThePrimeagen
+Insta: https://instagram.com/ThePrimeagen
+Twitter: https://twitter.com/ThePrimeagen
+VimRC &amp; i3: https://github.com/ThePrimeagen/.dotfiles
+Keyboard 15% off https://bit.ly/Prime360 USE CODE PRIME360  
+
+#coding #neovim  #typescript  #programming #vim #softwareengineering #codinglife #webdesign #webdevelopment #webdev #javascript #rustlang #rust #twitch #twitchstreamer #programmerhumor #codinghumor #software #softwareengineer #softwaredeveloper #softwaredevelopment</media:description>
+   <media:community>
+    <media:starRating count="10127" average="5.00" min="1" max="5"/>
+    <media:statistics views="170332"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:boD0ReK62FI</id>
+  <yt:videoId>boD0ReK62FI</yt:videoId>
+  <yt:channelId>UC8ENHE5xdFSwx71u3fDH5Xw</yt:channelId>
+  <title>Looking Under the Hood of JavaScript</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=boD0ReK62FI"/>
+  <author>
+   <name>ThePrimeagen</name>
+   <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+  </author>
+  <published>2023-01-20T13:37:53+00:00</published>
+  <updated>2023-06-13T08:09:16+00:00</updated>
+  <media:group>
+   <media:title>Looking Under the Hood of JavaScript</media:title>
+   <media:content url="https://www.youtube.com/v/boD0ReK62FI?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i3.ytimg.com/vi/boD0ReK62FI/hqdefault.jpg" width="480" height="360"/>
+   <media:description>Ever wonder what in the world is going on with JS?  Well in this we deep dive into v8, into the internals to figure out WTF IS GOING ON WITH SETTIMEOUT???
+
+SMI in v8?? https://v8.dev/blog/pointer-compression
+Aleksei: https://twitter.com/the_kozy
+
+### Twitch
+Everything is built live on twitch
+Twitch : https://bit.ly/3xhFO3E
+Discord: discord.gg/ThePrimeagen
+Spotify DevHour: https://open.spotify.com/show/4MLaDrQcQ5mi3rsnvWkwPt
+### Editor
+All my videos are edited by Flip.  Give him a follow!  https://twitter.com/flipmediaprod  He is also open to do more editing, so slide deeeeeeeeep into his dms.
+
+Join this channel to get access to perks:
+https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw/join
+
+### Links
+Linode: https://linode.com/prime
+https://discord.gg/ThePrimeagen
+Twitch: https://twitch.tv/ThePrimeagen
+Insta: https://instagram.com/ThePrimeagen
+Twitter: https://twitter.com/ThePrimeagen
+VimRC &amp; i3: https://github.com/ThePrimeagen/.dotfiles
+Keyboard 15% off https://bit.ly/Prime360 USE CODE PRIME360  
+
+#coding #neovim  #typescript  #programming #vim #softwareengineering #codinglife #webdesign #webdevelopment #webdev #javascript #rustlang #rust #twitch #twitchstreamer #programmerhumor #codinghumor #software #softwareengineer #softwaredeveloper #softwaredevelopment</media:description>
+   <media:community>
+    <media:starRating count="10201" average="5.00" min="1" max="5"/>
+    <media:statistics views="148042"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:U16RnpV48KQ</id>
+  <yt:videoId>U16RnpV48KQ</yt:videoId>
+  <yt:channelId>UC8ENHE5xdFSwx71u3fDH5Xw</yt:channelId>
+  <title>This Algorithm is 1,606,240% FASTER</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=U16RnpV48KQ"/>
+  <author>
+   <name>ThePrimeagen</name>
+   <uri>https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw</uri>
+  </author>
+  <published>2023-01-06T18:10:11+00:00</published>
+  <updated>2023-06-16T12:02:00+00:00</updated>
+  <media:group>
+   <media:title>This Algorithm is 1,606,240% FASTER</media:title>
+   <media:content url="https://www.youtube.com/v/U16RnpV48KQ?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i2.ytimg.com/vi/U16RnpV48KQ/hqdefault.jpg" width="480" height="360"/>
+   <media:description>7 Steps it took to make an algorithm 1,606,242% faster!!!!
+
+### David Perez
+https://github.com/david-a-perez
+
+### B3NNY
+https://twitter.com/_B_3_N_N_Y_
+
+### Bit video
+https://www.youtube.com/watch?v=y45v5SLjxaM
+
+### Code used in video
+https://github.com/ThePrimeagen/aoc/blob/2022/src/bin/day6_2.rs
+
+### Twitch
+Everything is built live on twitch
+Twitch : https://bit.ly/3xhFO3E
+Discord: discord.gg/ThePrimeagen
+Spotify DevHour: https://open.spotify.com/show/4MLaDrQcQ5mi3rsnvWkwPt
+### Editor
+All my videos are edited by Flip.  Give him a follow!  https://twitter.com/flipmediaprod  He is also open to do more editing, so slide deeeeeeeeep into his dms.
+
+Join this channel to get access to perks:
+https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw/join
+
+### Links
+Linode: https://linode.com/prime
+https://discord.gg/ThePrimeagen
+Twitch: https://twitch.tv/ThePrimeagen
+Insta: https://instagram.com/ThePrimeagen
+Twitter: https://twitter.com/ThePrimeagen
+VimRC &amp; i3: https://github.com/ThePrimeagen/.dotfiles
+Keyboard 15% off https://bit.ly/Prime360 USE CODE PRIME360  
+
+#coding #neovim  #typescript  #programming #vim #softwareengineering #codinglife #webdesign #webdevelopment #webdev #javascript #rustlang #rust #twitch #twitchstreamer #programmerhumor #codinghumor #software #softwareengineer #softwaredeveloper #softwaredevelopment</media:description>
+   <media:community>
+    <media:starRating count="20280" average="5.00" min="1" max="5"/>
+    <media:statistics views="478000"/>
+   </media:community>
+  </media:group>
+ </entry>
+</feed>

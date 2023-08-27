@@ -21,7 +21,7 @@ use reqwest::{self, Url};
 pub struct AtomFeed {
     pub id: String,
     pub title: String,
-    pub updated: DateTime<Utc>,
+    pub updated: Option<DateTime<Utc>>,
     pub author: Option<Author>,
     #[serde(default)]
     pub link: Vec<Link>,
@@ -69,11 +69,12 @@ pub struct Category {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]
 pub struct Entry {
+    #[serde(with = "entry_id")]
     pub id: String,
     pub title: String,
     #[serde(default)]
     pub link: Vec<Link>,
-    pub updated: DateTime<Utc>,
+    pub updated: Option<DateTime<Utc>>,
     pub author: Option<Author>,
     pub contributer: Option<Contributer>,
     pub published: Option<DateTime<Utc>>,
@@ -83,6 +84,30 @@ pub struct Entry {
     pub read: Option<()>,
     pub enclosure: Option<super::rss::Enclosure>,
     pub comments: Option<String>,
+}
+
+mod entry_id {
+    use serde::{self, Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(link: &str, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(link)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<String, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let id = String::deserialize(deserializer)?;
+        if id.starts_with("yt:video:") {
+            let video_id = &id[10..];
+            Ok(format!("https://youtube.com/watch?v={}", video_id))
+        } else {
+            Ok(id.to_string())
+        }
+    }
 }
 
 impl Entry {
@@ -292,9 +317,11 @@ mod test {
         let expected_feed = AtomFeed {
             id: "urn:uuid:60a76c80-d399-11d9-b93C-0003939e0af6".to_owned(),
             title: "Example Feed".to_owned(),
-            updated: DateTime::<FixedOffset>::parse_from_rfc3339("2003-12-13T18:30:02Z")
-                .unwrap()
-                .into(),
+            updated: Some(
+                DateTime::<FixedOffset>::parse_from_rfc3339("2003-12-13T18:30:02Z")
+                    .unwrap()
+                    .into(),
+            ),
             author: Some(Author {
                 name: "John Doe".to_owned(),
                 ..Default::default()
@@ -306,9 +333,11 @@ mod test {
             entry: vec![Entry {
                 id: "urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a".to_owned(),
                 title: "Atom-Powered Robots Run Amok".to_owned(),
-                updated: DateTime::<FixedOffset>::parse_from_rfc3339("2003-12-13T18:30:02Z")
-                    .unwrap()
-                    .into(),
+                updated: Some(
+                    DateTime::<FixedOffset>::parse_from_rfc3339("2003-12-13T18:30:02Z")
+                        .unwrap()
+                        .into(),
+                ),
                 summary: Some("Some text.".to_owned()),
                 link: vec![Link {
                     href: "http://example.org/2003/12/13/atom03".to_owned(),
@@ -320,5 +349,12 @@ mod test {
             ..Default::default()
         };
         assert_eq!(expected_feed, feed);
+    }
+
+    #[test]
+    fn youtube_feed() {
+        let url = get_test_dir().join("youtube_channel.xml");
+        let feed = AtomFeed::from_url(format!("file://{}", url.to_string_lossy()));
+        assert!(feed.is_ok());
     }
 }
