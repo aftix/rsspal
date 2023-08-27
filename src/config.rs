@@ -62,8 +62,8 @@ fn get_data_dir() -> PathBuf {
         return path;
     }
 
-    let cwd = env::current_dir().expect("Can not access current directory");
-    PathBuf::from(cwd)
+    
+    env::current_dir().expect("Can not access current directory")
 }
 
 pub fn get_config_path() -> PathBuf {
@@ -80,14 +80,14 @@ pub fn get_config_path() -> PathBuf {
     }
 
     let cwd = env::current_dir().expect("Can not access current directory");
-    PathBuf::from(cwd.join("config.toml"))
+    cwd.join("config.toml")
 }
 
 impl Config {
     pub fn new() -> anyhow::Result<Self> {
         let args = Args::parse();
 
-        let config_path = if args.config == "" {
+        let config_path = if args.config.is_empty() {
             get_config_path()
         } else {
             PathBuf::from(args.config)
@@ -122,7 +122,7 @@ impl Config {
         let env_token = get_token();
 
         // Now override the config with the cmd line arguments
-        if args.data_dir != "" {
+        if !args.data_dir.is_empty() {
             config.data_dir = PathBuf::from(args.data_dir);
         }
 
@@ -130,7 +130,7 @@ impl Config {
             config.interval = i;
         }
 
-        if args.token != "" {
+        if !args.token.is_empty() {
             config.discord_token = args.token;
         } else if let Ok(t) = env_token {
             config.discord_token = t.clone();

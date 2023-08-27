@@ -9,7 +9,7 @@ use lazy_static::lazy_static;
 use log::LevelFilter;
 
 #[cfg(debug_assertions)]
-use pretty_env_logger;
+
 #[cfg(not(debug_assertions))]
 use systemd_journal_logger::JournalLog;
 

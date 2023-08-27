@@ -80,7 +80,7 @@ impl RssItem {
         let description = self.description.clone();
         let title = self.title.clone();
         let enclosure = self.enclosure.clone();
-        let date = self.date.clone();
+        let date = self.date;
         let link = self.link.clone();
         let comments = self.comments.clone();
         let source = self.source.clone();
@@ -209,8 +209,8 @@ pub mod rfc822 {
     use chrono::{DateTime, TimeZone, Utc};
     use serde::{self, Deserialize, Deserializer, Serializer};
 
-    const FORMAT: &'static str = "%a, %d %b %Y %H:%M:%S %Z";
-    const FORMAT_SHORT: &'static str = "%a, %d %b %Y %H:%M %Z";
+    const FORMAT: &str = "%a, %d %b %Y %H:%M:%S %Z";
+    const FORMAT_SHORT: &str = "%a, %d %b %Y %H:%M %Z";
 
     pub fn into_datetime(str: impl AsRef<str>) -> Result<DateTime<Utc>, chrono::ParseError> {
         let parsed_long = Utc.datetime_from_str(str.as_ref(), FORMAT);

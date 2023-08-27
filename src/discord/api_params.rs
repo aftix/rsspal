@@ -21,7 +21,7 @@ pub(super) fn modify_channel(
         map.push_str(&format!(r#""topic": "{}""#, topic))
     }
 
-    map = map.trim_end_matches(",").to_string();
+    map = map.trim_end_matches(',').to_string();
     map.push('}');
 
     serde_json::from_str(&map).expect("failed to make JsonMap")
@@ -48,7 +48,7 @@ pub(super) fn create_channel(
         map.push_str(&format!(r#""parent_id": "{}""#, parent_id))
     }
 
-    map = map.trim_end_matches(",").to_string();
+    map = map.trim_end_matches(',').to_string();
     map.push('}');
 
     serde_json::from_str(&map).expect("failed to make JsonMap")

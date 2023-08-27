@@ -50,7 +50,7 @@ pub struct Outline {
 impl From<&Feed> for Outline {
     fn from(feed: &Feed) -> Self {
         match feed {
-            Feed::RSS(rss) => Self {
+            Feed::Rss(rss) => Self {
                 text: rss.channel.title.clone(),
                 content_type: "rss".into(),
                 title: Some(rss.channel.title.clone()),
@@ -58,7 +58,7 @@ impl From<&Feed> for Outline {
                 xml_url: rss.channel.url.clone(),
                 html_url: None,
             },
-            Feed::ATOM(atom) => {
+            Feed::Atom(atom) => {
                 let link = atom
                     .link
                     .iter()
@@ -122,7 +122,7 @@ impl From<Outline> for Feed {
                 } else {
                     vec![]
                 };
-                Self::ATOM(AtomFeed {
+                Self::Atom(AtomFeed {
                     title: outline.title.clone().unwrap(),
                     subtitle: outline.description.clone(),
                     link,
@@ -130,10 +130,10 @@ impl From<Outline> for Feed {
                     ..Default::default()
                 })
             }
-            _ => Self::RSS(RssFeed {
+            _ => Self::Rss(RssFeed {
                 channel: RssChannel {
-                    title: outline.title.clone().unwrap_or_else(String::default),
-                    description: outline.description.clone().unwrap_or_else(String::default),
+                    title: outline.title.clone().unwrap_or_default(),
+                    description: outline.description.clone().unwrap_or_default(),
                     url: outline.xml_url.clone(),
                     ..Default::default()
                 },

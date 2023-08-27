@@ -82,7 +82,7 @@ impl EventHandler for Handler {
     // Handle marking items read/unread on reaction
     async fn reaction_add(&self, ctx: Context, reaction: Reaction) {
         debug!("Recieved reaction emote to message event.");
-        let current_user = USER_ID.get().expect("failed to get USER_ID static").clone();
+        let current_user = *USER_ID.get().expect("failed to get USER_ID static");
 
         let msg = match reaction.message(&ctx).await {
             Ok(msg) => msg,
@@ -198,7 +198,7 @@ impl EventHandler for Handler {
 #[description("Gracefully shutdown the bot.")]
 pub async fn exit(_ctx: &Context, _msg: &Message) -> CommandResult {
     info!("Recieved exit command.");
-    send_termination().await.map_err(|e| CommandError::from(e))
+    send_termination().await.map_err(CommandError::from)
 }
 
 #[command]
@@ -276,7 +276,10 @@ pub async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
         Ok(feed) => {
             let barrier = Arc::new(Barrier::new(2));
             let send = COMMANDS.get().expect("failed to get COMMANDS static");
-            if let Err(e) = send.send((Command::AddFeed(feed), barrier.clone())).await {
+            if let Err(e) = send
+                .send((Command::AddFeed(Box::new(feed)), barrier.clone()))
+                .await
+            {
                 error!("Failed to send command: {}", e);
                 return Err(anyhow::anyhow!("failed to send command: {}", e).into());
             }

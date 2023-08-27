@@ -21,7 +21,7 @@ pub static COMMANDS: OnceLock<mpsc::Sender<(Command, Arc<Barrier>)>> = OnceLock:
 
 #[derive(Debug, Clone)]
 pub enum Command {
-    AddFeed(Feed),
+    AddFeed(Box<Feed>),
     EditFeed(Message, String, EditArgs),
     RemoveFeed(Message, String),
     ReloadFeed(Message, Option<String>),
@@ -66,17 +66,17 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                 match command {
                     Command::AddFeed(feed) => {
                         info!("Adding feed {}.", feed.title());
-                        if feeds.iter().find(|f| feed.url() == f.url()).is_some() {
+                        if feeds.iter().any(|f| feed.url() == f.url()) {
                             info!("Feed {}, already exists.", feed.title());
                             continue
                         }
-                        feeds.push(feed);
+                        feeds.push(*feed);
 
                         let new_feeds = &feeds[feeds.len()-1..];
-                        discord::setup_channels(&new_feeds, &ctx).await;
+                        discord::setup_channels(new_feeds, &ctx).await;
                         info!("Adding entries for feed {}", new_feeds[0].title());
                         match &feeds[0] {
-                            Feed::RSS(rss) => {
+                            Feed::Rss(rss) => {
                                 for item in &rss.channel.item {
                                     let publish = discord::publish_rss_item(&new_feeds[0].title(), item, &ctx).await;
                                     if let Err(e) = publish {
@@ -84,7 +84,7 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                                     }
                                 }
                             },
-                            Feed::ATOM(atom) => {
+                            Feed::Atom(atom) => {
                                 for entry in &atom.entry {
                                     let publish = discord::publish_atom_entry(&new_feeds[0].title(), entry, &ctx).await;
                                     if let Err(e) = publish {
@@ -194,14 +194,14 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                             },
                             Some(feed) =>
                                 match feed {
-                                Feed::RSS(rss) => rss.channel.item.iter_mut().find(|item| item.link == link).and_then(|item| {
+                                Feed::Rss(rss) => rss.channel.item.iter_mut().find(|item| item.link == link).map(|item| {
                                     item.read = Some(());
-                                    Some(())
+
                                 }).or_else(|| {
                                     error!("Could not find rss item with link {}.", link);
                                     None
                                 }),
-                                Feed::ATOM(atom) => atom.entry.iter_mut().find(|entry| entry.get_link_href() == link).and_then(|entry| {entry.read = Some(()); Some(())}).or_else(|| {
+                                Feed::Atom(atom) => atom.entry.iter_mut().find(|entry| entry.get_link_href() == link).map(|entry| {entry.read = Some(()); }).or_else(|| {
                                     error!("Could not find atom entry with link {}.", link);
                                     None
                                 }),
@@ -226,14 +226,14 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                             },
                             Some(feed) =>
                                 match feed {
-                                Feed::RSS(rss) => rss.channel.item.iter_mut().find(|item| item.link == link).and_then(|item| {
+                                Feed::Rss(rss) => rss.channel.item.iter_mut().find(|item| item.link == link).map(|item| {
                                     item.read = None;
-                                    Some(())
+
                                 }).or_else(|| {
                                     error!("Could not find rss item with link {}.", link);
                                     None
                                 }),
-                                Feed::ATOM(atom) => atom.entry.iter_mut().find(|entry| entry.get_link_href() == link).and_then(|entry| {entry.read = Some(()); Some(())}).or_else(|| {
+                                Feed::Atom(atom) => atom.entry.iter_mut().find(|entry| entry.get_link_href() == link).map(|entry| {entry.read = Some(()); }).or_else(|| {
                                     error!("Could not find atom entry with link {}.", link);
                                     None
                                 }),
@@ -247,7 +247,7 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                         }
                     },
                     Command::Export(msg, title) => {
-                        let opml: crate::opml::Opml = (title.unwrap_or_else(String::default), feeds.as_slice()).into();
+                        let opml: crate::opml::Opml = (title.unwrap_or_default(), feeds.as_slice()).into();
 
                         let opml = match se::to_string(&opml) {
                             Ok(s) => s,
@@ -298,7 +298,7 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                         debug!("{:?}", new_feeds);
 
                         for feed in new_feeds {
-                            if feeds.iter().find(|&f| feed.url() == f.url()).is_some() {
+                            if feeds.iter().any(|f| feed.url() == f.url()) {
                                 warn!("Skipping importing feed {} from OPML, url already exists in database.", feed.url());
                                 continue;
                             }
@@ -309,17 +309,17 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                                 }
                                 Ok(feed) => {
                                     info!("Adding feed {}.", feed.title());
-                                    if feeds.iter().find(|f| feed.url() == f.url()).is_some() {
+                                    if feeds.iter().any(|f| feed.url() == f.url()) {
                                         info!("Feed {}, already exists.", feed.title());
                                         continue
                                     }
                                     feeds.push(feed);
 
                                     let new_feeds = &feeds[feeds.len()-1..];
-                                    discord::setup_channels(&new_feeds, &ctx).await;
+                                    discord::setup_channels(new_feeds, &ctx).await;
                                     info!("Adding entries for feed {}", new_feeds[0].title());
                                     match &feeds[0] {
-                                        Feed::RSS(rss) => {
+                                        Feed::Rss(rss) => {
                                             for item in &rss.channel.item {
                                                 let publish = discord::publish_rss_item(&new_feeds[0].title(), item, &ctx).await;
                                                 if let Err(e) = publish {
@@ -327,7 +327,7 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                                                 }
                                             }
                                         },
-                                        Feed::ATOM(atom) => {
+                                        Feed::Atom(atom) => {
                                             for entry in &atom.entry {
                                                 let publish = discord::publish_atom_entry(&new_feeds[0].title(), entry, &ctx).await;
                                                 if let Err(e) = publish {
@@ -368,7 +368,7 @@ async fn diff_feed(update: Feed, feeds: &mut [Feed], ctx: &Context) {
     if let Some(mut feed) = feed {
         info!("Updating feed {}.", feed.title());
         match (update, &mut feed) {
-            (Feed::RSS(update), Feed::RSS(ref mut rss)) => {
+            (Feed::Rss(update), Feed::Rss(ref mut rss)) => {
                 debug!("Feed {} is RSS.", rss.channel.title);
                 debug!("Updating feed {} items.", rss.channel.title);
                 let mut set = HashSet::with_capacity(rss.channel.item.len());
@@ -402,7 +402,7 @@ async fn diff_feed(update: Feed, feeds: &mut [Feed], ctx: &Context) {
                 rss.channel.skip_days = update.channel.skip_days;
                 rss.channel.last_updated = Some(chrono::offset::Utc::now());
             }
-            (Feed::ATOM(update), Feed::ATOM(ref mut atom)) => {
+            (Feed::Atom(update), Feed::Atom(ref mut atom)) => {
                 debug!("Feed {} is atom.", atom.title);
                 debug!("Updating feed {} items.", atom.title);
                 let mut set = HashSet::with_capacity(atom.entry.len());

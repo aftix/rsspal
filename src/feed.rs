@@ -43,71 +43,71 @@ pub async fn export(feeds: &[Feed]) -> anyhow::Result<()> {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub enum Feed {
-    RSS(RssFeed),
-    ATOM(AtomFeed),
+    Rss(RssFeed),
+    Atom(AtomFeed),
 }
 
 impl Feed {
     pub fn description(&self) -> String {
         match self {
-            Self::RSS(rss) => rss.channel.description.clone(),
-            Self::ATOM(atom) => atom.subtitle.clone().unwrap_or_else(String::default),
+            Self::Rss(rss) => rss.channel.description.clone(),
+            Self::Atom(atom) => atom.subtitle.clone().unwrap_or_default(),
         }
     }
 
     pub fn title(&self) -> String {
         match self {
-            Self::RSS(rss) => rss.channel.title.clone(),
-            Self::ATOM(atom) => atom.title.clone(),
+            Self::Rss(rss) => rss.channel.title.clone(),
+            Self::Atom(atom) => atom.title.clone(),
         }
     }
 
     pub fn set_title(&mut self, title: impl Into<String>) {
         match self {
-            Self::RSS(ref mut rss) => rss.channel.title = title.into(),
-            Self::ATOM(ref mut atom) => atom.title = title.into(),
+            Self::Rss(ref mut rss) => rss.channel.title = title.into(),
+            Self::Atom(ref mut atom) => atom.title = title.into(),
         };
     }
 
     pub fn url(&self) -> String {
         match self {
-            Self::RSS(rss) => rss.channel.url.clone(),
-            Self::ATOM(atom) => atom.url.clone(),
+            Self::Rss(rss) => rss.channel.url.clone(),
+            Self::Atom(atom) => atom.url.clone(),
         }
     }
 
     pub fn set_url(&mut self, url: impl Into<String>) {
         match self {
-            Self::RSS(ref mut rss) => rss.channel.url = url.into(),
-            Self::ATOM(ref mut atom) => atom.url = url.into(),
+            Self::Rss(ref mut rss) => rss.channel.url = url.into(),
+            Self::Atom(ref mut atom) => atom.url = url.into(),
         };
     }
 
     pub fn should_update(&self) -> bool {
         match self {
-            Self::RSS(rss) => rss.should_update(),
-            Self::ATOM(atom) => atom.should_update(),
+            Self::Rss(rss) => rss.should_update(),
+            Self::Atom(atom) => atom.should_update(),
         }
     }
 
     pub fn discord_category(&self) -> Option<String> {
         match self {
-            Self::RSS(rss) => rss.channel.discord_category.clone(),
-            Self::ATOM(atom) => atom.discord_category.clone(),
+            Self::Rss(rss) => rss.channel.discord_category.clone(),
+            Self::Atom(atom) => atom.discord_category.clone(),
         }
     }
 
     pub fn set_discord_category(&mut self, url: &Option<String>) {
         match self {
-            Self::RSS(ref mut rss) => rss.channel.discord_category = url.clone(),
-            Self::ATOM(ref mut atom) => atom.discord_category = url.clone(),
+            Self::Rss(ref mut rss) => rss.channel.discord_category = url.clone(),
+            Self::Atom(ref mut atom) => atom.discord_category = url.clone(),
         };
     }
 }
 
 impl Default for Feed {
     fn default() -> Self {
-        Self::RSS(RssFeed::default())
+        Self::Rss(RssFeed::default())
     }
 }
 
@@ -119,18 +119,18 @@ pub fn from_url(
     info!("Retrieving feed from url {}", url.as_ref());
 
     let mut feed = match AtomFeed::from_url(&url) {
-        Ok(f) => Ok(Feed::ATOM(f)),
-        _ => RssFeed::from_url(&url).map(Feed::RSS),
+        Ok(f) => Ok(Feed::Atom(f)),
+        _ => RssFeed::from_url(&url).map(Feed::Rss),
     }?;
 
     match &mut feed {
-        Feed::RSS(rss) => {
+        Feed::Rss(rss) => {
             if let Some(title) = title {
                 rss.channel.title = title;
             }
             rss.channel.discord_category = category;
         }
-        Feed::ATOM(atom) => {
+        Feed::Atom(atom) => {
             if let Some(title) = title {
                 atom.title = title;
             }
@@ -142,8 +142,8 @@ pub fn from_url(
 }
 
 fn is_image_mime_type(mime: impl AsRef<str>) -> bool {
-    match mime.as_ref() {
-        "image/jpeg" | "image/jpg" | "image/png" | "image/gif" => true,
-        _ => false,
-    }
+    matches!(
+        mime.as_ref(),
+        "image/jpeg" | "image/jpg" | "image/png" | "image/gif"
+    )
 }

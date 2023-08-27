@@ -124,7 +124,7 @@ impl Entry {
         let description = self.summary.clone();
         let title = self.title.clone();
         let enclosure = self.get_enclosure_img().map(String::from);
-        let date = self.published.clone();
+        let date = self.published;
         let link = self.get_link_href().to_owned();
         let comments = self.comments.clone();
         let source = self.source.clone();
@@ -167,7 +167,7 @@ impl Entry {
             if let Some(ref s) = source {
                 embed.field("source", &s.title, true);
                 embed.field("source id", &s.id, true);
-                embed.field("source updated", &s.updated, true);
+                embed.field("source updated", s.updated, true);
             }
 
             embed

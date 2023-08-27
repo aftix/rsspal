@@ -32,7 +32,7 @@ pub fn title_to_channel_name(s: impl AsRef<str>) -> String {
     lazy_static! {
         static ref SPACE_REGEX: Regex = Regex::new(r"\s+").unwrap();
         static ref SPECIAL_REGEX: Regex = Regex::new(r"[^\w-]").unwrap();
-        static ref ENDS_REGEX: RegexSet = RegexSet::new(&[r"^-+", r"-+$",]).unwrap();
+        static ref ENDS_REGEX: RegexSet = RegexSet::new([r"^-+", r"-+$",]).unwrap();
     }
 
     let s = SPACE_REGEX.replace_all(s.as_ref(), "-");
@@ -103,7 +103,7 @@ pub async fn mark_read(guild_id: GuildId, msg: Message, ctx: &Context) -> anyhow
         guild_id,
         msg,
         ctx,
-        |name| format!("read-{}", truncate(&name, 95)),
+        |name| format!("read-{}", truncate(name, 95)),
         '📕',
     )
     .await
@@ -235,9 +235,8 @@ pub async fn remove_feed(msg: Message, id: &str, feeds: &[Feed], ctx: &Context) 
 
         let channel = channels.iter().find(|c| c.name() == channel_name);
         if let Some(channel) = channel {
-            match ctx.http.delete_channel(channel.id.0).await {
-                Err(e) => error!("Failed deleting channel {} in guild {}: {}", id, guild.0, e),
-                _ => (),
+            if let Err(e) = ctx.http.delete_channel(channel.id.0).await {
+                error!("Failed deleting channel {} in guild {}: {}", id, guild.0, e);
             }
         } else {
             warn!(
@@ -412,16 +411,16 @@ pub async fn setup_channels(feeds: &[Feed], ctx: &Context) {
             }
 
             let add_channel = if let Some(channel) = channels_by_name.get(&chan_name) {
-                update_channel_metadata(&channel, &feed, &channels_by_name, ctx).await
+                update_channel_metadata(channel, feed, &channels_by_name, ctx).await
             } else {
-                create_channel(guild.0, &feed, &channels_by_name, ctx).await
+                create_channel(guild.0, feed, &channels_by_name, ctx).await
             };
 
             if let Some((new_chan, new_thread)) = add_channel {
-                channels.insert(new_chan.id.clone(), new_chan.clone());
+                channels.insert(new_chan.id, new_chan.clone());
                 channels_by_name.insert(new_chan.name.clone(), new_chan);
 
-                channels.insert(new_thread.id.clone(), new_thread.clone());
+                channels.insert(new_thread.id, new_thread.clone());
                 channels_by_name.insert(new_thread.name.clone(), new_thread);
             }
         }
@@ -449,7 +448,7 @@ async fn setup_channel_category(
         return Some(());
     }
 
-    let name = title_to_channel_name(&name.unwrap());
+    let name = title_to_channel_name(name.unwrap());
 
     if by_name.contains_key(&name) {
         return Some(());
@@ -500,7 +499,7 @@ async fn update_channel_metadata(
     by_name: &NameMap,
     ctx: &Context,
 ) -> Option<(GuildChannel, GuildChannel)> {
-    let name = title_to_channel_name(&feed.title());
+    let name = title_to_channel_name(feed.title());
     let read_title = format!("read-{}", truncate(&name, 95));
 
     let parent_id = if let Some(category) = feed.discord_category() {
@@ -593,7 +592,7 @@ async fn create_channel(
     by_name: &NameMap,
     ctx: &Context,
 ) -> Option<(GuildChannel, GuildChannel)> {
-    let name = title_to_channel_name(&feed.title());
+    let name = title_to_channel_name(feed.title());
     let read_title = format!("read-{}", truncate(&name, 95));
 
     let parent_id = if let Some(category) = feed.discord_category() {
