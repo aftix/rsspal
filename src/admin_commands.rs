@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::{Arc, OnceLock};
 
 use regex::Regex;
@@ -14,8 +15,9 @@ use tokio::task::spawn;
 
 use serenity::async_trait;
 use serenity::framework::standard::{
-    macros::{command, group},
-    CommandError, CommandResult,
+    help_commands,
+    macros::{command, group, help},
+    CommandError, CommandGroup, CommandResult, HelpOptions,
 };
 use serenity::model::id::GuildId;
 use serenity::model::{gateway::Ready, prelude::*};
@@ -35,6 +37,19 @@ pub static USER_ID: OnceLock<UserId> = OnceLock::new();
 pub struct Admin;
 
 pub struct Handler;
+
+#[help]
+async fn help(
+    ctx: &Context,
+    msg: &Message,
+    args: Args,
+    help_options: &'static HelpOptions,
+    groups: &[&'static CommandGroup],
+    owners: HashSet<UserId>,
+) -> CommandResult {
+    help_commands::with_embeds(ctx, msg, args, help_options, groups, owners).await?;
+    Ok(())
+}
 
 #[async_trait]
 impl EventHandler for Handler {
