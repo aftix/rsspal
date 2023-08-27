@@ -104,14 +104,14 @@ jobs:
 
       - name: Copy files to host
         run: |
-          scp rsspal.service rsspal-release rsspal-creds ${{ secrets.USER }}@${{ secrets.SERVER }}:~
+          scp rsspal.service rsspal rsspal-creds ${{ secrets.USER }}@${{ secrets.SERVER }}:~
 
       - name: Create installation script
         run: |
           cat > install_rsspal.sh <<EOF
           mv '$HOME/rsspal-creds' /root
           systemctl disable --now rsspal.service || true
-          install -D -T '$HOME/rsspal-release' /usr/local/bin/rsspal
+          install -D '$HOME/rsspal' /usr/local/bin
           install -D -m 644 '$HOME/rsspal.service' /usr/lib/systemd/system
           systemctl daemon-reload
           systemctl enable --now rsspal.service
