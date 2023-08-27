@@ -7,9 +7,6 @@ use lazy_static::lazy_static;
 
 #[cfg(not(debug_assertions))]
 use log::LevelFilter;
-
-#[cfg(debug_assertions)]
-
 #[cfg(not(debug_assertions))]
 use systemd_journal_logger::JournalLog;
 
@@ -35,9 +32,12 @@ async fn main() -> anyhow::Result<()> {
     {
         pretty_env_logger::init();
     }
+
     #[cfg(not(debug_assertions))]
     {
-        JournalLog::default().install().unwrap();
+        JournalLog::default()
+            .install()
+            .expect("Failed to initialize JournalLog");
         log::set_max_level(LevelFilter::Info);
     }
 
