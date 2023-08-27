@@ -21,16 +21,11 @@ jobs:
         with:
           submodules: recursive
         
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-          profile: minimal
-        
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
       - name: Build
-        uses: actions-rs/cargo@v1
+        uses: clechasseur/rs-cargo@v1
         with:
           command: build
           args: --profile ${{ matrix.profile }}
@@ -46,20 +41,18 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          override: true
-          profile: minimal
           components: clippy
-
       - uses: Swatinem/rust-cache@v2
 
       - name: Run Clippy
-        uses: actions-rs/cargo@v1
+        uses: auguwu/clippy-action@v2
         with:
-          command: clippy
-          args: --profile ${{ matrix.profile }} --all-targets --all-features -- --deny=warnings
+          all-features: true
+          deny: warnings
+          args: --profile ${{ matrix.profile }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   test:
     name: Cargo nextest
@@ -69,20 +62,16 @@ jobs:
         with:
           recursive: true
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-          profile: minimal
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install cargo-nextest
-        uses: actions-rs/cargo@v1
+        uses: baptise0928/cargo-install@v2
         with:
-          command: install
-          args: cargo-nextest
+          crate: cargo-nextest
 
       - name: Run tests
-        uses: actions-rs/cargo@v1
+        uses: clechhasseur/rs-cargo@v1
         with:
           command: nextest
           args: run
