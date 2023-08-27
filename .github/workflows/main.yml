@@ -111,10 +111,10 @@ jobs:
       - name: Create installation script
         run: |
           cat > install_rsspal.sh <<EOF
-          mv '$HOME/rsspal-creds' /root
+          mv "\$HOME/rsspal-creds" /root
           systemctl disable --now rsspal.service || true
-          install -D '$HOME/rsspal' /usr/local/bin
-          install -D -m 644 '$HOME/rsspal.service' /usr/lib/systemd/system
+          install -D "\$HOME/rsspal" /usr/local/bin
+          install -D -m 644 "\$HOME/rsspal.service" /usr/lib/systemd/system
           systemctl daemon-reload
           systemctl enable --now rsspal.service
           EOF
