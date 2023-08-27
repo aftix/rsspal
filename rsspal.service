@@ -9,6 +9,7 @@ ExecStop=/usr/bin/pkill rsspal
 User=www-data
 WorkingDirectory=/mnt/www
 EnvironmentFile=/root/rsspal-creds
+Environment="RUST_LOG=rsspal"
 
 [Install]
 WantedBy=multi-user.target

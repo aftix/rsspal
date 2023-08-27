@@ -143,7 +143,28 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                             feeds[location].set_title(&title);
                         }
 
-                            discord::setup_channels(&feeds[location..=location], &ctx).await;
+                        discord::setup_channels(&feeds[location..=location], &ctx).await;
+                        info!("Adding entries for feed {}", &feeds[location].title());
+                        match &feeds[0] {
+                            Feed::Rss(rss) => {
+                                for item in &rss.channel.item {
+                                    let publish = discord::publish_rss_item(&feeds[location].title(), item, &ctx).await;
+                                    if let Err(e) = publish {
+                                        warn!("failed to publish rss item to feed: {}", e);
+                                    }
+                                }
+                            },
+                            Feed::Atom(atom) => {
+                                for entry in &atom.entry {
+                                    let publish = discord::publish_atom_entry(&feeds[location].title(), entry, &ctx).await;
+                                    if let Err(e) = publish {
+                                        warn!("failed to publish atom item to feed: {}", e);
+                                    }
+                                }},
+                        };
+                        if let Err(e) = feed::export(&feeds).await {
+                            warn!("Failed to save feeds database: {}.", e);
+                        }
                     },
                     Command::RemoveFeed(msg, id) => {
                         info!("Removing feed {}", id);

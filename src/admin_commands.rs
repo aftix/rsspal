@@ -429,7 +429,6 @@ pub async fn edit(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
     };
     args.advance();
 
-    debug!("Parsing edit arguments: {} ({}).", args.rest(), args.len());
     let mut keyvals = Vec::with_capacity(args.len());
     while !args.is_empty() {
         let keyval: String = match args.parse() {
@@ -488,8 +487,6 @@ pub async fn edit(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         }
         Ok(args) => args,
     };
-
-    debug!("Edit args are {:?}.", edit_args);
 
     let send = COMMANDS.get().expect("failed to get COMMANDS static");
     let barrier = Arc::new(Barrier::new(2));
