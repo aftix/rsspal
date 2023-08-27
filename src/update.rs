@@ -70,12 +70,13 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                             info!("Feed {}, already exists.", feed.title());
                             continue
                         }
+                        let location = feeds.len();
                         feeds.push(*feed);
 
-                        let new_feeds = &feeds[feeds.len()-1..];
+                        let new_feeds = &feeds[location..=location];
                         discord::setup_channels(new_feeds, &ctx).await;
                         info!("Adding entries for feed {}", new_feeds[0].title());
-                        match &feeds[0] {
+                        match &new_feeds[0] {
                             Feed::Rss(rss) => {
                                 for item in &rss.channel.item {
                                     let publish = discord::publish_rss_item(&new_feeds[0].title(), item, &ctx).await;
@@ -145,7 +146,7 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
 
                         discord::setup_channels(&feeds[location..=location], &ctx).await;
                         info!("Adding entries for feed {}", &feeds[location].title());
-                        match &feeds[0] {
+                        match &feeds[location] {
                             Feed::Rss(rss) => {
                                 for item in &rss.channel.item {
                                     let publish = discord::publish_rss_item(&feeds[location].title(), item, &ctx).await;
@@ -334,12 +335,13 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                                         info!("Feed {}, already exists.", feed.title());
                                         continue
                                     }
+                                    let location = feeds.len();
                                     feeds.push(feed);
 
-                                    let new_feeds = &feeds[feeds.len()-1..];
+                                    let new_feeds = &feeds[location..=location];
                                     discord::setup_channels(new_feeds, &ctx).await;
                                     info!("Adding entries for feed {}", new_feeds[0].title());
-                                    match &feeds[0] {
+                                    match &new_feeds[0] {
                                         Feed::Rss(rss) => {
                                             for item in &rss.channel.item {
                                                 let publish = discord::publish_rss_item(&new_feeds[0].title(), item, &ctx).await;
