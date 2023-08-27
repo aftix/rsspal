@@ -121,4 +121,4 @@ jobs:
 
       - name: Install rsspal on host
         run: |
-          ssh "${{ secrets.USER }}@${{ secrets.SERVER }}" 'sudo sh -ls' < install_rsspal.sh
+          sed 's/^/sudo /' install_rsspal.sh | ssh "${{ secrets.USER }}@${{ secrets.SERVER }}" 'sh -ls'
