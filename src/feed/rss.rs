@@ -348,6 +348,7 @@ mod test {
             channel: RssChannel {
                 title: "NASA Space Station News".to_string(),
                 link: String::default(),
+                url: format!("file://{}", url.to_string_lossy()),
                 description: "A RSS news feed containing the latest NASA press releases on the International Space Station.".to_string(),
                 pub_date: Some(into_datetime("Tue, 10 Jun 2003 04:00:00 GMT").unwrap()),
                 docs: Some("https://www.rssboard.org/rss-specification".to_owned()),
