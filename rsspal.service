@@ -4,12 +4,11 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/rsspal.sh
+ExecStart=/usr/local/bin/rsspal
 ExecStop=/usr/bin/pkill rsspal
 User=www-data
 WorkingDirectory=/mnt/www
-LoadCredentialEncrypted=token:/var/www/discord_token.cred
-Environment=TOKENPATH=%d/token
+EnvironmentFile=/root/rsspal-creds
 
 [Install]
 WantedBy=multi-user.target
