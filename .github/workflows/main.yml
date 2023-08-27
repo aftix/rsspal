@@ -16,7 +16,11 @@ jobs:
     name: Build rsspal
     strategy:
       matrix:
-        profile: [dev, release]
+        include:
+          - profile: dev
+            target: debug
+          - profile: release
+            target: release
     runs-on: ubuntu-latest
 
     steps:
@@ -34,7 +38,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: rsspal-${{ matrix.profile }}
-          path: target/${{ matrix.profile }}/rsspal
+          path: target/x86_64-unknown-linux-gnu/${{ matrix.target }}/rsspal
 
   clippy:
     name: Cargo clippy
