@@ -128,7 +128,7 @@ pub struct Category {
     #[serde(rename = "@domain")]
     domain: Option<String>,
     #[serde(rename = "$text")]
-    value: String,
+    value: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]
