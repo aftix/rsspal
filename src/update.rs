@@ -10,8 +10,11 @@ use tokio::sync::{mpsc, Barrier};
 use tokio::task::JoinSet;
 use tokio::time::{sleep_until, Duration, Instant};
 
+use quick_xml::{de, se};
+
 use crate::discord;
 use crate::feed::{self, Feed};
+use crate::opml::Opml;
 use crate::CONFIG;
 
 pub static COMMANDS: OnceLock<mpsc::Sender<(Command, Arc<Barrier>)>> = OnceLock::new();
@@ -24,6 +27,8 @@ pub enum Command {
     ReloadFeed(Message, Option<String>),
     MarkRead(String, String),   // Channel name, item url
     MarkUnread(String, String), // Channel name, item url
+    Export(Message, Option<String>),
+    Import(Message),
     Exit,
 }
 
@@ -238,6 +243,102 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                         if save.is_some() {
                             if let Err(e) = crate::feed::export(&feeds).await {
                                 error!("Erorr saving feeds: {}.", e);
+                            }
+                        }
+                    },
+                    Command::Export(msg, title) => {
+                        let opml: crate::opml::Opml = (title.unwrap_or_else(String::default), feeds.as_slice()).into();
+
+                        let opml = match se::to_string(&opml) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                if let Err(e) = msg.reply(&ctx, &format!("Error serializing opml: {}", e)).await {
+                                    error!("Failed to send message to {}: {}", msg.channel_id.0, e);
+                                }
+                                error!("Error serializing opml: {}", e);
+                                continue;
+                            },
+                        };
+
+                        discord::send_str_as_file_reply(msg, opml, &ctx).await;
+                    },
+                    Command::Import(msg) => {
+                        if msg.attachments.len() != 1 {
+                            if let Err(e) = msg.reply(&ctx, "Need an atachment to import.").await {
+                                error!("Failed to reply to message {}: {}.", msg.id.0, e);
+                            }
+                            warn!("Import command used without an attachment.");
+                            continue;
+                        }
+
+                        let attachment = &msg.attachments[0];
+                        let opml = match attachment.download().await {
+                            Err(e) => {
+                                if let Err(e) = msg.reply(&ctx, "Could not download attachment.").await {
+                                    error!("Failed to reply to message {}: {}.", msg.id.0, e);
+                                }
+                                warn!("Failed to download attachmnet to {} at {}: {}.", msg.id.0, attachment.url, e);
+                                continue;
+                            },
+                            Ok(v) => String::from_utf8_lossy(v.as_slice()).to_string(),
+                        };
+
+                        let opml: Opml = match de::from_str(&opml) {
+                            Err(e) => {
+                                if let Err(e) = msg.reply(&ctx, &format!("Could not parse opml file: {}.", e)).await {
+                                    error!("Failed to reply to message {}: {}.", msg.id.0, e);
+                                }
+                                warn!("Could not parse opml file: {}.", e);
+                                continue;
+                            }
+                            Ok(opml) => opml,
+                        };
+
+                        let new_feeds: Vec<Feed> = opml.into();
+                        debug!("{:?}", new_feeds);
+
+                        for feed in new_feeds {
+                            if feeds.iter().find(|&f| feed.url() == f.url()).is_some() {
+                                warn!("Skipping importing feed {} from OPML, url already exists in database.", feed.url());
+                                continue;
+                            }
+
+                            match feed::from_url(feed.url(), Some(feed.title()), None) {
+                                Err(e) => {
+                                    warn!("Could not load feed from url {}: {}.", feed.url(), e);
+                                }
+                                Ok(feed) => {
+                                    info!("Adding feed {}.", feed.title());
+                                    if feeds.iter().find(|f| feed.url() == f.url()).is_some() {
+                                        info!("Feed {}, already exists.", feed.title());
+                                        continue
+                                    }
+                                    feeds.push(feed);
+
+                                    let new_feeds = &feeds[feeds.len()-1..];
+                                    discord::setup_channels(&new_feeds, &ctx).await;
+                                    info!("Adding entries for feed {}", new_feeds[0].title());
+                                    match &feeds[0] {
+                                        Feed::RSS(rss) => {
+                                            for item in &rss.channel.item {
+                                                let publish = discord::publish_rss_item(&new_feeds[0].title(), item, &ctx).await;
+                                                if let Err(e) = publish {
+                                                    warn!("failed to publish rss item to feed: {}", e);
+                                                }
+                                            }
+                                        },
+                                        Feed::ATOM(atom) => {
+                                            for entry in &atom.entry {
+                                                let publish = discord::publish_atom_entry(&new_feeds[0].title(), entry, &ctx).await;
+                                                if let Err(e) = publish {
+                                                    warn!("failed to publish atom item to feed: {}", e);
+                                                }
+                                            }},
+                                    };
+                                    if let Err(e) = feed::export(&feeds).await {
+                                        warn!("Failed to save feeds database: {}.", e);
+                                    }
+                                },
                             }
                         }
                     },

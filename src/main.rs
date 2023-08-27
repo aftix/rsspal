@@ -17,6 +17,7 @@ mod admin_commands;
 mod config;
 mod discord;
 mod feed;
+mod opml;
 mod signal;
 mod update;
 

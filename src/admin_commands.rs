@@ -31,7 +31,7 @@ pub static GUILDS: OnceLock<Vec<GuildId>> = OnceLock::new();
 pub static USER_ID: OnceLock<UserId> = OnceLock::new();
 
 #[group]
-#[commands(ping, exit, add, remove, poll, edit, reload)]
+#[commands(ping, exit, add, remove, poll, edit, reload, export, import)]
 pub struct Admin;
 
 pub struct Handler;
@@ -548,6 +548,119 @@ pub async fn reload(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .clone();
     if let Err(e) = send
         .send((Command::ReloadFeed(msg.clone(), id), barrier.clone()))
+        .await
+    {
+        error!("Failed to send on COMMANDS channel: {}", e);
+        match msg.reply(ctx, "Internal error").await {
+            Err(err) => {
+                error!(
+                    "Failed to send command: {} and reply to message {}: {}",
+                    e, msg.id.0, err
+                );
+                return Err(anyhow::anyhow!(
+                    "Failed to send command: {} and reply to message {}: {}",
+                    e,
+                    msg.id.0,
+                    err
+                )
+                .into());
+            }
+            Ok(_) => {
+                error!("Failed to send command: {}", e);
+                return Err(anyhow::anyhow!("Failed to send command: {}", e).into());
+            }
+        }
+    }
+
+    barrier.wait().await;
+    Ok(())
+}
+
+#[command]
+#[description("Import OPML feed list")]
+#[usage("~import <opml file attached to message>")]
+#[num_args(0)]
+pub async fn import(ctx: &Context, msg: &Message) -> CommandResult {
+    info!("Recieved import command.");
+
+    let barrier = Arc::new(Barrier::new(2));
+    let send = COMMANDS
+        .get()
+        .expect("Failed to get COMMANDS static")
+        .clone();
+
+    if let Err(e) = send
+        .send((Command::Import(msg.clone()), barrier.clone()))
+        .await
+    {
+        error!("Failed to send on COMMANDS channel: {}", e);
+        match msg.reply(ctx, "Internal error").await {
+            Err(err) => {
+                error!(
+                    "Failed to send command: {} and reply to message {}: {}",
+                    e, msg.id.0, err
+                );
+                return Err(anyhow::anyhow!(
+                    "Failed to send command: {} and reply to message {}: {}",
+                    e,
+                    msg.id.0,
+                    err
+                )
+                .into());
+            }
+            Ok(_) => {
+                error!("Failed to send command: {}", e);
+                return Err(anyhow::anyhow!("Failed to send command: {}", e).into());
+            }
+        }
+    }
+
+    barrier.wait().await;
+    Ok(())
+}
+
+#[command]
+#[description("Export OPML feed list")]
+#[usage("~export [opml title]")]
+#[max_args(1)]
+pub async fn export(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    info!("Recieved export command.");
+
+    let title = if args.is_empty() {
+        None
+    } else {
+        match args.parse::<String>() {
+            Err(e) => match msg.reply(ctx, "Failed to parse argument.").await {
+                Err(err) => {
+                    error!(
+                        "Error parsing export argument: {} and replying to message {}: {}",
+                        e, msg.id.0, err
+                    );
+                    return Err(anyhow::anyhow!(
+                        "Error parsing export argument: {} and replying to message {}: {}",
+                        e,
+                        msg.id.0,
+                        err
+                    )
+                    .into());
+                }
+                Ok(_) => {
+                    error!("Error parsing reload argument: {}.", e);
+                    return Err(anyhow::anyhow!("Error parsing export argument: {}.", e).into());
+                }
+            },
+            Ok(s) => Some(s),
+        }
+    };
+
+    let barrier = Arc::new(Barrier::new(2));
+    let send = COMMANDS
+        .get()
+        .expect("Failed to get COMMANDS static")
+        .clone();
+
+    if let Err(e) = send
+        .send((Command::Export(msg.clone(), title), barrier.clone()))
         .await
     {
         error!("Failed to send on COMMANDS channel: {}", e);

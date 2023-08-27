@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 
 use regex::{Regex, RegexSet};
 
@@ -9,6 +10,9 @@ use serenity::model::prelude::*;
 use serenity::prelude::*;
 
 use lazy_static::lazy_static;
+
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
 
 use crate::admin_commands::GUILDS;
 use crate::feed::atom::Entry;
@@ -119,6 +123,76 @@ pub async fn mark_unread(guild_id: GuildId, msg: Message, ctx: &Context) -> anyh
         '📖',
     )
     .await
+}
+
+pub async fn send_str_as_file_reply(msg: Message, text: String, ctx: &Context) {
+    let channel = match msg.channel(ctx).await {
+        Ok(chan) => chan,
+        Err(e) => {
+            error!("Failed to get channel for message {}: {}", msg.id.0, e);
+            return;
+        }
+    };
+
+    let channel = if let Some(c) = channel.guild() {
+        c
+    } else {
+        warn!("Message {} is not in guild.", msg.id.0);
+        return;
+    };
+
+    let tempdir = match tempfile::tempdir() {
+        Ok(dir) => dir,
+        Err(e) => {
+            error!("Unable to create temporary file: {}.", e);
+            return;
+        }
+    };
+
+    let dir_path = PathBuf::from(tempdir.path());
+
+    {
+        let mut f = match File::create(dir_path.join("feeds.opml")).await {
+            Err(e) => {
+                error!(
+                    "Could not create temporary file in {}: {}.",
+                    dir_path.to_string_lossy(),
+                    e
+                );
+                return;
+            }
+            Ok(f) => f,
+        };
+
+        if let Err(e) = f.write_all(text.as_bytes()).await {
+            error!("Failed to write to OPML temporary file: {}.", e);
+            return;
+        }
+    }
+
+    let f = match File::open(dir_path.join("feeds.opml")).await {
+        Err(e) => {
+            error!(
+                "Could not read file {}: {}.",
+                dir_path.join("feeds.opml").to_string_lossy(),
+                e
+            );
+            return;
+        }
+        Ok(f) => f,
+    };
+
+    if let Err(e) = channel
+        .send_message(ctx, |m| {
+            m.add_file((&f, "feeds.opml")).reference_message(&msg)
+        })
+        .await
+    {
+        error!(
+            "Failed to reply to message {} with opml file: {}.",
+            msg.id.0, e
+        );
+    }
 }
 
 // Returns index of feed to remove in feeds
