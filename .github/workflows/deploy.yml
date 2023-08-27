@@ -7,11 +7,15 @@ on:
     types:
       - completed
 
+
 jobs:
   deploy:
     name: Deploy rsspal to server
     runs-on: ubuntu-latest
     if: github.event.workflow_run.conclusion == 'success'
+    concurrency:
+      group: deploy
+      cancel-in-progress: true
     steps:
       - name: Get latest code
         uses: actions/checkout@v3
