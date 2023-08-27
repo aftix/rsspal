@@ -21,6 +21,7 @@ pub enum Command {
     AddFeed(Feed),
     EditFeed(Message, String, EditArgs),
     RemoveFeed(Message, String),
+    ReloadFeed(Message, Option<String>),
     MarkRead(String, String),   // Channel name, item url
     MarkUnread(String, String), // Channel name, item url
     Exit,
@@ -150,6 +151,32 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
                         }
 
                     },
+                    Command::ReloadFeed(msg, id) => {
+                        info!("Reloading feed {:?}", id);
+                        if let Some(id) = id {
+                            let channel_name = discord::title_to_channel_name(&id);
+                            let location = feeds.iter().enumerate().find_map(|(idx, feed)| {
+                                if discord::title_to_channel_name(feed.title()) == channel_name || feed.url() == id {
+                                    Some(idx)
+                                } else {
+                                    None
+                                }
+                            });
+
+                            if location.is_none() {
+                                if let Err(e) = msg.reply(&ctx, &format!("Feed {} not found", id)).await {
+                                    error!("Failed to send message to {}: {}", msg.channel_id.0, e);
+                                }
+                                warn!("Could not feed {} to edit.", id);
+                                continue;
+                            }
+                            let location = location.unwrap();
+
+                            update_feeds(&mut feeds[location..=location], true,&ctx).await;
+                        } else {
+                            update_feeds(&mut feeds, true, &ctx).await;
+                        }
+                    },
                     Command::MarkRead(name, link) => {
                         let save = match feeds.iter_mut().find(|feed| {
                             let channel_title = crate::discord::title_to_channel_name(feed.title());
@@ -226,7 +253,7 @@ pub async fn background_task(mut feeds: Vec<Feed>, ctx: Context) -> anyhow::Resu
 
             },
             _ = timer => {
-                update_feeds(&mut feeds, &ctx).await;
+                update_feeds(&mut feeds, false, &ctx).await;
                 to_sleep = Instant::now().checked_add(interval).expect("couldn't add interval to instant");
             },
         }
@@ -318,11 +345,11 @@ async fn diff_feed(update: Feed, feeds: &mut [Feed], ctx: &Context) {
     }
 }
 
-async fn update_feeds(feeds: &mut Vec<Feed>, ctx: &Context) {
+async fn update_feeds(feeds: &mut [Feed], force: bool, ctx: &Context) {
     info!("Updating feeds");
     let mut futures = JoinSet::new();
     for feed in feeds.iter_mut() {
-        if feed.should_update() {
+        if force || feed.should_update() {
             let url = feed.url();
             futures.spawn(async {
                 info!("Updating feed at {}.", url);

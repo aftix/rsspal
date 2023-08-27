@@ -29,7 +29,7 @@ pub async fn import() -> anyhow::Result<Vec<Feed>> {
         .map_err(|e| anyhow::anyhow!("error reading JSON: {}", e))
 }
 
-pub async fn export(feeds: &Vec<Feed>) -> anyhow::Result<()> {
+pub async fn export(feeds: &[Feed]) -> anyhow::Result<()> {
     let db_path = match CONFIG.read() {
         Err(e) => anyhow::bail!("error reading CONFIG static: {}", e),
         Ok(cfg) => cfg.data_dir.join("database.json"),
@@ -37,7 +37,7 @@ pub async fn export(feeds: &Vec<Feed>) -> anyhow::Result<()> {
 
     info!("Writing database to {:?}", db_path);
     let file = File::create(&db_path)?;
-    serde_json::to_writer_pretty(file, feeds)?;
+    serde_json::to_writer_pretty(file, &Vec::from(feeds))?;
     Ok(())
 }
 
