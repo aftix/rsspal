@@ -101,9 +101,8 @@ mod entry_id {
         D: Deserializer<'de>,
     {
         let id = String::deserialize(deserializer)?;
-        if id.starts_with("yt:video:") {
-            let video_id = &id[9..];
-            Ok(format!("https://youtube.com/watch?v={}", video_id))
+        if let Some(stripped) = id.strip_prefix("yt:video:") {
+            Ok(format!("https://youtube.com/watch?v={}", stripped))
         } else {
             Ok(id.to_string())
         }
