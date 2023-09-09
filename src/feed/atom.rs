@@ -102,7 +102,7 @@ mod entry_id {
     {
         let id = String::deserialize(deserializer)?;
         if id.starts_with("yt:video:") {
-            let video_id = &id[10..];
+            let video_id = &id[9..];
             Ok(format!("https://youtube.com/watch?v={}", video_id))
         } else {
             Ok(id.to_string())
