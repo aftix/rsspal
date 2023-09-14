@@ -82,136 +82,11 @@ pub async fn background_task(feeds: Vec<Feed>, ctx: Context) -> anyhow::Result<(
                     },
                 }
             },
-            processed = spawned_channel.recv() => match processed {
-                None => {
-                    if let Err(e) = exit_feeds_loop(feeds.read().await.as_ref()).await {
-                        error!("Error exiting background_task: {}", e);
-                    }
-                    break 'L;
-                },
-                Some(cmd) =>
-                    match cmd {
-                        None => {
-                            if let Err(e) = exit_feeds_loop(feeds.read().await.as_ref()).await {
-                                error!("Error exiting background_task: {}", e);
-                            }
-                            break 'L;
-                        },
-                        Some(ProcessResult::Noop) => (),
-                        Some(ProcessResult::Add(new)) => {
-                            discord::setup_channels(&new, &ctx).await;
-
-                            let mut guard = feeds.write().await;
-                            let feeds: &mut Vec<Feed> = guard.as_mut();
-
-                            let start = feeds.len();
-                            feeds.extend(new.into_iter());
-
-                            for feed in &feeds[start..] {
-                                info!("Adding entries for feed {}", feed.title());
-                                match &feed {
-                                    Feed::Rss(rss) => {
-                                        for item in &rss.channel.item {
-                                            let publish =
-                                                discord::publish_rss_item(&feed.title(), item, &ctx).await;
-                                            if let Err(e) = publish {
-                                                warn!("failed to publish rss item to feed: {}", e);
-                                            }
-                                        }
-                                    }
-                                    Feed::Atom(atom) => {
-                                        for entry in &atom.entry {
-                                            let publish =
-                                                discord::publish_atom_entry(&feed.title(), entry, &ctx).await;
-                                            if let Err(e) = publish {
-                                                warn!("failed to publish atom item to feed: {}", e);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        Some(ProcessResult::Remove(idx)) => {
-                            let mut guard = feeds.write().await;
-                            let feeds: &mut Vec<Feed> = guard.as_mut();
-                            feeds.remove(idx);
-                        },
-                        Some(ProcessResult::Edit(idx, msg, id, args)) => {
-                            let mut guard = feeds.write().await;
-                            let feeds: &mut Vec<Feed> = guard.as_mut();
-                            if let Some(url) = args.url {
-                                info!("Setting feed {} url to {}.", id, url);
-                                feeds[idx].set_url(&url);
-                            }
-
-                            if let Some(category) = args.category {
-                                info!("Setting feed {} discord category to {}.", id, category);
-                                let category = if category == "None" {
-                                    None
-                                } else {
-                                    Some(category)
-                                };
-                                feeds[idx].set_discord_category(&category);
-                            }
-
-                            // Easiest way is to remove the feed then add it again under the new title
-                            if discord::remove_feed(msg.clone(), &id, &feeds[idx..=idx], &ctx).await
-                                != Some(0)
-                            {
-                                if let Err(e) = msg.reply(&ctx, &format!("Feed {} not found", id)).await {
-                                    error!("Failed to send message to {}: {}", msg.channel_id.0, e);
-                                }
-                                error!("Removing feed did not find feed {}.", id);
-                                continue;
-                            }
-
-                            if let Some(title) = args.title {
-                                feeds[idx].set_title(&title);
-                            }
-
-                            if let Err(e) = spawned_sender.send(Some(ProcessResult::Add(vec![feeds.remove(idx)]))).await {
-                                error!("Failed to send processed command on channel: {}", e);
-                            }
-                        },
-                    Some(ProcessResult::MarkUnread(save))=> {
-                        if let Some((feed_idx, idx)) = save {
-                            {
-                                let mut guard = feeds.write().await;
-                                let feeds: &mut Vec<Feed> = guard.as_mut();
-                                match &mut feeds[feed_idx] {
-                                    Feed::Rss(ref mut rss) => rss.channel.item[idx].read = None,
-                                    Feed::Atom(ref mut atom) => atom.entry[idx].read = None,
-                                }
-                            }
-
-                            if let Err(e) = crate::feed::export(feeds.read().await.as_ref()).await {
-                                error!("Erorr saving feeds: {}.", e);
-                            }
-                        }
-                    },
-                    Some(ProcessResult::MarkRead(save)) => {
-                        if let Some((feed_idx, idx)) = save {
-                            {
-                                let mut guard = feeds.write().await;
-                                let feeds: &mut Vec<Feed> = guard.as_mut();
-                                match &mut feeds[feed_idx] {
-                                    Feed::Rss(ref mut rss) => rss.channel.item[idx].read = None,
-                                    Feed::Atom(ref mut atom) => atom.entry[idx].read = None,
-                                }
-                            }
-
-                            if let Err(e) = crate::feed::export(feeds.read().await.as_ref()).await {
-                                error!("Erorr saving feeds: {}.", e);
-                            }
-                        }
-
-                    },
-                    Some(ProcessResult::UpdateFeeds(start, end)) => {
-                        let mut guard = feeds.write().await;
-                        let feeds: &mut Vec<Feed> = guard.as_mut();
-                        update_feeds(&mut feeds[start..end], true, &ctx).await;
-                    }
+            processed = spawned_channel.recv() => if let Some(Some(())) = processed {
+                if let Err(e) = exit_feeds_loop(feeds.read().await.as_ref()).await {
+                    error!("Error exiting background_task: {}", e);
                 }
+                break 'L;
             },
             _ = timer => {
                 update_feeds(feeds.write().await.as_mut(), false, &ctx).await;
@@ -222,33 +97,56 @@ pub async fn background_task(feeds: Vec<Feed>, ctx: Context) -> anyhow::Result<(
     Ok(())
 }
 
-#[derive(Debug, Clone, Default)]
-enum ProcessResult {
-    #[default]
-    Noop,
-    Add(Vec<Feed>),
-    Remove(usize),
-    Edit(usize, Message, String, EditArgs),
-    MarkUnread(Option<(usize, usize)>),
-    MarkRead(Option<(usize, usize)>),
-    UpdateFeeds(usize, usize), // Exclusive end
+async fn remove_feed(idx: usize, feeds: impl AsRef<RwLock<Vec<Feed>>>) {
+    let mut guard = feeds.as_ref().write().await;
+    let feeds: &mut Vec<Feed> = guard.as_mut();
+    feeds.remove(idx);
 }
 
-async fn process_command(
-    cmd: Command,
-    ctx: &Context,
-    feeds: Arc<RwLock<Vec<Feed>>>,
-) -> Option<ProcessResult> {
+async fn add_feeds(new: Vec<Feed>, feeds: impl AsRef<RwLock<Vec<Feed>>>, ctx: &Context) {
+    discord::setup_channels(&new, ctx).await;
+
+    let mut guard = feeds.as_ref().write().await;
+    let feeds: &mut Vec<Feed> = guard.as_mut();
+
+    let start = feeds.len();
+    feeds.extend(new.into_iter());
+
+    for feed in &feeds[start..] {
+        info!("Adding entries for feed {}", feed.title());
+        match &feed {
+            Feed::Rss(rss) => {
+                for item in &rss.channel.item {
+                    let publish = discord::publish_rss_item(&feed.title(), item, ctx).await;
+                    if let Err(e) = publish {
+                        warn!("failed to publish rss item to feed: {}", e);
+                    }
+                }
+            }
+            Feed::Atom(atom) => {
+                for entry in &atom.entry {
+                    let publish = discord::publish_atom_entry(&feed.title(), entry, ctx).await;
+                    if let Err(e) = publish {
+                        warn!("failed to publish atom item to feed: {}", e);
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn process_command(cmd: Command, ctx: &Context, feeds: Arc<RwLock<Vec<Feed>>>) -> Option<()> {
     match cmd {
         Command::AddFeed(feed) => {
             info!("Adding feed {}.", feed.title());
             if feeds.read().await.iter().any(|f| feed.url() == f.url()) {
                 info!("Feed {}, already exists.", feed.title());
-                return Some(ProcessResult::Noop);
+                return None;
             }
             let push = vec![*feed];
 
-            return Some(ProcessResult::Add(push));
+            add_feeds(push, feeds, ctx).await;
+            return None;
         }
         Command::EditFeed(msg, id, args) => {
             info!("Editing feed {}.", id);
@@ -273,17 +171,55 @@ async fn process_command(
                     error!("Failed to send message to {}: {}", msg.channel_id.0, e);
                 }
                 warn!("Could not feed {} to edit.", id);
-                return Some(ProcessResult::Noop);
+                return None;
             }
             let location = location.unwrap();
 
-            return Some(ProcessResult::Edit(location, msg, id, args));
+            let push = {
+                let mut guard = feeds.write().await;
+                let feeds: &mut Vec<Feed> = guard.as_mut();
+                if let Some(url) = args.url {
+                    info!("Setting feed {} url to {}.", id, url);
+                    feeds[location].set_url(&url);
+                }
+
+                if let Some(category) = args.category {
+                    info!("Setting feed {} discord category to {}.", id, category);
+                    let category = if category == "None" {
+                        None
+                    } else {
+                        Some(category)
+                    };
+                    feeds[location].set_discord_category(&category);
+                }
+
+                // Easiest way is to remove the feed then add it again under the new title
+                if discord::remove_feed(msg.clone(), &id, &feeds[location..=location], ctx).await
+                    != Some(0)
+                {
+                    if let Err(e) = msg.reply(&ctx, &format!("Feed {} not found", id)).await {
+                        error!("Failed to send message to {}: {}", msg.channel_id.0, e);
+                    }
+                    error!("Removing feed did not find feed {}.", id);
+                    return None;
+                }
+
+                if let Some(title) = args.title {
+                    feeds[location].set_title(&title);
+                }
+
+                vec![feeds.remove(location)]
+            };
+
+            add_feeds(push, feeds, ctx).await;
+            return None;
         }
         Command::RemoveFeed(msg, id) => {
             info!("Removing feed {}", id);
 
-            if let Some(idx) = discord::remove_feed(msg, &id, &feeds.read().await, ctx).await {
-                return Some(ProcessResult::Remove(idx));
+            let remove_result = discord::remove_feed(msg, &id, &feeds.read().await, ctx).await;
+            if let Some(idx) = remove_result {
+                remove_feed(idx, feeds).await;
             }
         }
         Command::ReloadFeed(msg, id) => {
@@ -310,13 +246,17 @@ async fn process_command(
                         error!("Failed to send message to {}: {}", msg.channel_id.0, e);
                     }
                     warn!("Could not feed {} to edit.", id);
-                    return Some(ProcessResult::Noop);
+                    return None;
                 }
                 let location = location.unwrap();
 
-                return Some(ProcessResult::UpdateFeeds(location, location + 1));
+                let mut guard = feeds.write().await;
+                let feeds: &mut Vec<Feed> = guard.as_mut();
+                update_feeds(&mut feeds[location..=location], true, ctx).await;
             } else {
-                return Some(ProcessResult::UpdateFeeds(0, feeds.read().await.len()));
+                let mut guard = feeds.write().await;
+                let feeds: &mut Vec<Feed> = guard.as_mut();
+                update_feeds(feeds.as_mut_slice(), true, ctx).await;
             }
         }
         Command::MarkRead(name, link) => {
@@ -354,7 +294,20 @@ async fn process_command(
                 },
             };
 
-            return Some(ProcessResult::MarkRead(save));
+            if let Some((feed_idx, idx)) = save {
+                {
+                    let mut guard = feeds.write().await;
+                    let feeds: &mut Vec<Feed> = guard.as_mut();
+                    match &mut feeds[feed_idx] {
+                        Feed::Rss(ref mut rss) => rss.channel.item[idx].read = None,
+                        Feed::Atom(ref mut atom) => atom.entry[idx].read = None,
+                    }
+                }
+
+                if let Err(e) = crate::feed::export(feeds.read().await.as_ref()).await {
+                    error!("Erorr saving feeds: {}.", e);
+                }
+            }
         }
         Command::MarkUnread(name, link) => {
             let save = match feeds.read().await.iter().enumerate().find(|(_, feed)| {
@@ -392,7 +345,20 @@ async fn process_command(
                 },
             };
 
-            return Some(ProcessResult::MarkUnread(save));
+            if let Some((feed_idx, idx)) = save {
+                {
+                    let mut guard = feeds.write().await;
+                    let feeds: &mut Vec<Feed> = guard.as_mut();
+                    match &mut feeds[feed_idx] {
+                        Feed::Rss(ref mut rss) => rss.channel.item[idx].read = None,
+                        Feed::Atom(ref mut atom) => atom.entry[idx].read = None,
+                    }
+                }
+
+                if let Err(e) = crate::feed::export(feeds.read().await.as_ref()).await {
+                    error!("Erorr saving feeds: {}.", e);
+                }
+            }
         }
         Command::Export(msg, title) => {
             let guard = feeds.read().await;
@@ -409,7 +375,7 @@ async fn process_command(
                         error!("Failed to send message to {}: {}", msg.channel_id.0, e);
                     }
                     error!("Error serializing opml: {}", e);
-                    return Some(ProcessResult::Noop);
+                    return None;
                 }
             };
 
@@ -421,7 +387,7 @@ async fn process_command(
                     error!("Failed to reply to message {}: {}.", msg.id.0, e);
                 }
                 warn!("Import command used without an attachment.");
-                return Some(ProcessResult::Noop);
+                return None;
             }
 
             let attachment = &msg.attachments[0];
@@ -434,7 +400,7 @@ async fn process_command(
                         "Failed to download attachmnet to {} at {}: {}.",
                         msg.id.0, attachment.url, e
                     );
-                    return Some(ProcessResult::Noop);
+                    return None;
                 }
                 Ok(v) => String::from_utf8_lossy(v.as_slice()).to_string(),
             };
@@ -448,7 +414,7 @@ async fn process_command(
                         error!("Failed to reply to message {}: {}.", msg.id.0, e);
                     }
                     warn!("Could not parse opml file: {}.", e);
-                    return Some(ProcessResult::Noop);
+                    return None;
                 }
                 Ok(opml) => opml,
             };
@@ -483,14 +449,15 @@ async fn process_command(
                 })
             });
 
-            return Some(ProcessResult::Add(new_feeds));
+            add_feeds(new_feeds, feeds, ctx).await;
+            return None;
         }
         Command::Exit => {
-            return None;
+            return Some(());
         }
     }
 
-    Some(ProcessResult::Noop)
+    None
 }
 
 async fn diff_feed(update: Feed, feeds: &mut [Feed], ctx: &Context) {
