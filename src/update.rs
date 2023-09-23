@@ -299,8 +299,8 @@ async fn process_command(cmd: Command, ctx: &Context, feeds: Arc<RwLock<Vec<Feed
                     let mut guard = feeds.write().await;
                     let feeds: &mut Vec<Feed> = guard.as_mut();
                     match &mut feeds[feed_idx] {
-                        Feed::Rss(ref mut rss) => rss.channel.item[idx].read = None,
-                        Feed::Atom(ref mut atom) => atom.entry[idx].read = None,
+                        Feed::Rss(ref mut rss) => rss.channel.item[idx].read = Some(()),
+                        Feed::Atom(ref mut atom) => atom.entry[idx].read = Some(()),
                     }
                 }
 
