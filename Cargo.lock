@@ -1262,6 +1262,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "flate2",
  "lazy_static",
  "log",
  "nix",

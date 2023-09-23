@@ -1,5 +1,8 @@
 use std::fs::File;
 
+use flate2::write::{GzDecoder, GzEncoder};
+use flate2::Compression;
+
 use log::{info, warn};
 
 use serde::{Deserialize, Serialize};
@@ -16,7 +19,7 @@ use rss::RssFeed;
 pub async fn import() -> anyhow::Result<Vec<Feed>> {
     let db_path = match CONFIG.read() {
         Err(e) => anyhow::bail!("error reading CONFIG static: {}", e),
-        Ok(cfg) => cfg.data_dir.join("database.json"),
+        Ok(cfg) => cfg.data_dir.join("database.json.gz"),
     };
 
     info!("Loading database from {:?}", db_path);
@@ -25,19 +28,19 @@ pub async fn import() -> anyhow::Result<Vec<Feed>> {
         return Ok(Vec::new());
     }
 
-    serde_json::from_reader(File::open(&db_path)?)
+    serde_json::from_reader(GzDecoder::new(File::open(&db_path)?))
         .map_err(|e| anyhow::anyhow!("error reading JSON: {}", e))
 }
 
 pub async fn export(feeds: &[Feed]) -> anyhow::Result<()> {
     let db_path = match CONFIG.read() {
         Err(e) => anyhow::bail!("error reading CONFIG static: {}", e),
-        Ok(cfg) => cfg.data_dir.join("database.json"),
+        Ok(cfg) => cfg.data_dir.join("database.json.gz"),
     };
 
     info!("Writing database to {:?}", db_path);
     let file = File::create(&db_path)?;
-    serde_json::to_writer_pretty(file, &Vec::from(feeds))?;
+    serde_json::to_writer_pretty(GzEncoder::new(file, Compression::best()), &Vec::from(feeds))?;
     Ok(())
 }
 
