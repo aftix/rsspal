@@ -206,18 +206,20 @@ pub fn xml_from_reader(url: impl Into<String>, read: impl BufRead) -> anyhow::Re
 }
 
 pub mod rfc822 {
-    use chrono::{DateTime, TimeZone, Utc};
+    use chrono::{DateTime, Utc};
     use serde::{self, Deserialize, Deserializer, Serializer};
 
-    const FORMAT: &str = "%a, %d %b %Y %H:%M:%S %Z";
-    const FORMAT_SHORT: &str = "%a, %d %b %Y %H:%M %Z";
+    const FORMAT: &str = "%a, %d %b %Y %H:%M:%S %z";
+    const FORMAT_SHORT: &str = "%a, %d %b %Y %H:%M %z";
 
     pub fn into_datetime(str: impl AsRef<str>) -> Result<DateTime<Utc>, chrono::ParseError> {
-        let parsed_long = Utc.datetime_from_str(str.as_ref(), FORMAT);
+        println!("Parsing datetime {}", str.as_ref());
+        let parsed_long = DateTime::parse_from_str(str.as_ref(), FORMAT);
         if parsed_long.is_ok() {
-            parsed_long
+            parsed_long.map(Into::into)
         } else {
-            Utc.datetime_from_str(str.as_ref(), FORMAT_SHORT)
+            let next = DateTime::parse_from_str(str.as_ref(), FORMAT_SHORT).map(Into::into);
+            next
         }
     }
 
@@ -350,7 +352,7 @@ mod test {
                 link: String::default(),
                 url: format!("file://{}", url.to_string_lossy()),
                 description: "A RSS news feed containing the latest NASA press releases on the International Space Station.".to_string(),
-                pub_date: Some(into_datetime("Tue, 10 Jun 2003 04:00:00 GMT").unwrap()),
+                pub_date: Some(into_datetime("Tue, 10 Jun 2003 04:00:00 +0000").unwrap()),
                 docs: Some("https://www.rssboard.org/rss-specification".to_owned()),
                 managing_editor: Some("neil.armstrong@example.com (Neil Armstrong)".to_owned()),
                 web_master: Some("sally.ride@example.com (Sally Ride)".to_owned()),
@@ -359,7 +361,7 @@ mod test {
                         title: Some("Louisiana Students to Hear from NASA Astronauts Aboard Space Station".to_owned()),
                         link: "http://www.nasa.gov/press-release/louisiana-students-to-hear-from-nasa-astronauts-aboard-space-station".to_owned(),
                         description: "As part of the state's first Earth-to-space call, students from Louisiana will have an opportunity soon to hear from NASA astronauts aboard the International Space Station.".to_owned(),
-                        date: Some(into_datetime("Fri, 21 Jul 2023 09:04 EDT").unwrap()),
+                        date: Some(into_datetime("Fri, 21 Jul 2023 09:04 -0400").unwrap()),
                         guid: Some("http://www.nasa.gov/press-release/louisiana-students-to-hear-from-nasa-astronauts-aboard-space-station".to_owned()),
                         ..Default::default()
                     },
@@ -367,7 +369,7 @@ mod test {
                         title: None,
                         link: "http://www.nasa.gov/press-release/nasa-awards-integrated-mission-operations-contract-iii".to_owned(),
                         description: "NASA has selected KBR Wyle Services, LLC, of Fulton, Maryland, to provide mission and flight crew operations support for the International Space Station and future human space exploration.".to_owned(),
-                        date: Some(into_datetime("Thu, 20 Jul 2023 15:05 EDT").unwrap()),
+                        date: Some(into_datetime("Thu, 20 Jul 2023 15:05 -0400").unwrap()),
                         guid: Some("http://www.nasa.gov/press-release/nasa-awards-integrated-mission-operations-contract-iii".to_owned()),
                         ..Default::default()
                     },
@@ -375,7 +377,7 @@ mod test {
                         title: Some("NASA Expands Options for Spacewalking, Moonwalking Suits".to_owned()),
                         link: "http://www.nasa.gov/press-release/nasa-expands-options-for-spacewalking-moonwalking-suits-services".to_owned(),
                         description: "NASA has awarded Axiom Space and Collins Aerospace task orders under existing contracts to advance spacewalking capabilities in low Earth orbit, as well as moonwalking services for Artemis missions.".to_owned(),
-                        date: Some(into_datetime("Mon, 10 Jul 2023 14:14 EDT").unwrap()),
+                        date: Some(into_datetime("Mon, 10 Jul 2023 14:14 -0400").unwrap()),
                         guid: Some("http://www.nasa.gov/press-release/nasa-expands-options-for-spacewalking-moonwalking-suits-services".to_owned()),
                         enclosure: Some(Enclosure {
                             url: "http://www.nasa.gov/sites/default/files/styles/1x1_cardfeed/public/thumbnails/image/iss068e027836orig.jpg?itok=ucNUaaGx".to_owned(),
@@ -388,7 +390,7 @@ mod test {
                         title: Some("NASA to Provide Coverage as Dragon Departs Station".to_owned()),
                         link: "http://www.nasa.gov/press-release/nasa-to-provide-coverage-as-dragon-departs-station-with-science".to_owned(),
                         description: "NASA is set to receive scientific research samples and hardware as a SpaceX Dragon cargo resupply spacecraft departs the International Space Station on Thursday, June 29.".to_owned(),
-                        date: Some(into_datetime("Tue, 20 May 2003 08:56:02 GMT").unwrap()),
+                        date: Some(into_datetime("Tue, 20 May 2003 08:56:02 +0000").unwrap()),
                         guid: Some("http://www.nasa.gov/press-release/nasa-to-provide-coverage-as-dragon-departs-station-with-science".to_owned()),
                         ..Default::default()
                     },
@@ -396,7 +398,7 @@ mod test {
                         title: Some("NASA Plans Coverage of Roscosmos Spacewalk Outside Space Station".to_owned()),
                         link: "http://liftoff.msfc.nasa.gov/news/2003/news-laundry.asp".to_owned(),
                         description: "Compared to earlier spacecraft, the International Space Station has many luxuries, but laundry facilities are not one of them.  Instead, astronauts have other options.".to_owned(),
-                        date: Some(into_datetime("Mon, 26 Jun 2023 12:45 EDT").unwrap()),
+                        date: Some(into_datetime("Mon, 26 Jun 2023 12:45 -0400").unwrap()),
                         guid: Some("http://liftoff.msfc.nasa.gov/2003/05/20.html#item570".to_owned()),
                         enclosure: Some(Enclosure {
                             url: "http://www.nasa.gov/sites/default/files/styles/1x1_cardfeed/public/thumbnails/image/spacex_dragon_june_29.jpg?itok=nIYlBLme".to_owned(),
