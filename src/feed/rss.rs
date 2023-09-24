@@ -213,7 +213,6 @@ pub mod rfc822 {
     const FORMAT_SHORT: &str = "%a, %d %b %Y %H:%M %z";
 
     pub fn into_datetime(str: impl AsRef<str>) -> Result<DateTime<Utc>, chrono::ParseError> {
-        println!("Parsing datetime {}", str.as_ref());
         let parsed_long = DateTime::parse_from_str(str.as_ref(), FORMAT);
         if parsed_long.is_ok() {
             parsed_long.map(Into::into)
