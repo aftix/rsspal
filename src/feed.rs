@@ -1,6 +1,7 @@
 use std::fs::File;
 
-use flate2::write::{GzDecoder, GzEncoder};
+use flate2::read::GzDecoder;
+use flate2::write::GzEncoder;
 use flate2::Compression;
 
 use log::{info, warn};
