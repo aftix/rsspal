@@ -1,63 +1,59 @@
-use serenity::json::JsonMap;
+use serenity::json::{json, JsonMap};
 
-pub(super) fn modify_channel(
+pub fn modify_channel(
     name: Option<&str>,
     parent_id: Option<u64>,
     topic: Option<&str>,
     remove_parent: bool,
 ) -> JsonMap {
-    let mut map = String::from("{");
+    let mut map = JsonMap::new();
     if let Some(name) = name {
-        map.push_str(&format!(r#""name": "{}","#, name));
+        map.insert(String::from("name"), json!(name));
     }
 
     if let Some(parent_id) = parent_id {
-        map.push_str(&format!(r#""parent_id": "{}","#, parent_id));
+        map.insert(String::from("parent_id"), json!(parent_id));
     } else if remove_parent {
-        map.push_str(r#""parent_id": null,"#);
+        map.insert(String::from("parent_id"), json!(null));
     }
 
     if let Some(topic) = topic {
-        map.push_str(&format!(r#""topic": "{}""#, topic))
+        map.insert(String::from("topic"), json!(topic));
     }
 
-    map = map.trim_end_matches(',').to_string();
-    map.push('}');
-
-    serde_json::from_str(&map).expect("failed to make JsonMap")
+    map
 }
 
-pub(super) fn create_channel(
+pub fn create_channel(
     name: &str,
     category: bool,
     topic: Option<&str>,
     parent_id: Option<u64>,
 ) -> JsonMap {
-    let mut map = format!(r#"{{"name": "{}","#, name);
+    let mut map = JsonMap::new();
+
+    map.insert(String::from("name"), json!(name));
     if category {
-        map.push_str(r#""type": 4,"#);
+        map.insert(String::from("type"), json!(4));
     } else {
-        map.push_str(r#""type": 0,"#);
+        map.insert(String::from("type"), json!(0));
     }
 
     if let Some(topic) = topic {
-        map.push_str(&format!(r#""topic": "{}","#, topic))
+        map.insert(String::from("topic"), json!(topic));
     }
 
     if let Some(parent_id) = parent_id {
-        map.push_str(&format!(r#""parent_id": "{}""#, parent_id))
+        map.insert(String::from("parent_id"), json!(parent_id));
     }
 
-    map = map.trim_end_matches(',').to_string();
-    map.push('}');
-
-    serde_json::from_str(&map).expect("failed to make JsonMap")
+    map
 }
 
-pub(super) fn create_thread(name: &str) -> JsonMap {
-    serde_json::from_str(&format!(
-        r#"{{"name": "{}", "type": 12}}"#,
-        super::truncate(name, 95)
-    ))
-    .expect("failed to make JsonMap")
+pub fn create_thread(name: &str) -> JsonMap {
+    let name = super::truncate(name, 95);
+    let mut map = JsonMap::new();
+    map.insert(String::from("name"), json!(name));
+    map.insert(String::from("type"), json!(12));
+    map
 }
