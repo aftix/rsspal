@@ -33,7 +33,7 @@ pub static GUILDS: OnceLock<Vec<GuildId>> = OnceLock::new();
 pub static USER_ID: OnceLock<UserId> = OnceLock::new();
 
 #[group]
-#[commands(ping, exit, add, remove, poll, edit, reload, export, import)]
+#[commands(ping, exit, add, remove, poll, edit, reload, export, import, useragent)]
 pub struct Admin;
 
 pub struct Handler;
@@ -262,7 +262,13 @@ pub async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
 
     let title: Option<String> = args.single().ok();
 
-    match feed::from_url(&url, title, None) {
+    let user_agent = CONFIG
+        .read()
+        .expect("failed to get CONFIG static")
+        .user_agent
+        .clone();
+
+    match feed::from_url(&url, title, None, user_agent) {
         Err(e) => {
             match msg
                 .reply(ctx, &format!("Failed to load feed from {}: {}", url, e))
@@ -702,6 +708,54 @@ pub async fn export(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
     barrier.wait().await;
     Ok(())
+}
+
+#[command]
+#[description("Set user agent string")]
+#[usage("~useragent [user agent]")]
+#[max_args(1)]
+pub async fn useragent(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    info!("Recieved poll command.");
+    if args.remaining() == 0 {
+        CONFIG
+            .write()
+            .expect("failed to write CONFIG static")
+            .user_agent = None;
+        info!("Cleared user agent.");
+        if let Err(e) = msg.reply(ctx, "Cleared user agent string.").await {
+            warn!("Failed to reply to message {}: {}", msg.id.0, e);
+        }
+        return Ok(());
+    }
+
+    match args.parse::<String>() {
+        Err(e) => match msg.reply(ctx, "Argument must be string.").await {
+            Err(err) => {
+                error!(
+                    "Failed to set new user agent string: {} and replying to message {}: {}",
+                    e, msg.id.0, err
+                );
+                Err(anyhow::anyhow!(
+                    "Failed to set user agent: {} and send error reply to message {}: {}",
+                    e,
+                    msg.id.0,
+                    err
+                )
+                .into())
+            }
+            Ok(_) => {
+                error!("Failed to set user agent: {}", e);
+                Err(anyhow::anyhow!("Failed to set user agent: {}", e).into())
+            }
+        },
+        Ok(user_agent) => {
+            CONFIG
+                .write()
+                .expect("failed to write CONFIG static")
+                .user_agent = Some(user_agent);
+            Ok(())
+        }
+    }
 }
 
 #[command]

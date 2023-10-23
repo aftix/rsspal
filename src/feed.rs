@@ -119,12 +119,13 @@ pub fn from_url(
     url: impl AsRef<str>,
     title: Option<String>,
     category: Option<String>,
+    user_agent: Option<String>,
 ) -> anyhow::Result<Feed> {
     info!("Retrieving feed from url {}", url.as_ref());
 
-    let mut feed = match AtomFeed::from_url(&url) {
+    let mut feed = match AtomFeed::from_url(&url, user_agent.clone()) {
         Ok(f) => Ok(Feed::Atom(f)),
-        _ => RssFeed::from_url(&url).map(Feed::Rss),
+        _ => RssFeed::from_url(&url, user_agent).map(Feed::Rss),
     }?;
 
     match &mut feed {

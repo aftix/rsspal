@@ -432,7 +432,13 @@ async fn process_command(cmd: Command, ctx: &Context, feeds: Arc<RwLock<Vec<Feed
                         return false;
                     }
 
-                    match feed::from_url(feed.url(), Some(feed.title()), None) {
+                    let user_agent = CONFIG
+                        .read()
+                        .expect("failed to get CONFIG static")
+                        .user_agent
+                        .clone();
+
+                    match feed::from_url(feed.url(), Some(feed.title()), None, user_agent) {
                         Err(e) => {
                             warn!("Could not load feed from url {}: {}.", feed.url(), e);
                         }
@@ -551,7 +557,12 @@ async fn update_feeds(feeds: &mut [Feed], force: bool, ctx: &Context) {
             let url = feed.url();
             futures.spawn(async {
                 info!("Updating feed at {}.", url);
-                feed::from_url(url, None, None)
+                let user_agent = CONFIG
+                    .read()
+                    .expect("failed to get CONFIG static")
+                    .user_agent
+                    .clone();
+                feed::from_url(url, None, None, user_agent)
             });
         }
     }

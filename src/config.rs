@@ -30,6 +30,10 @@ struct Args {
     // Interval inbetween updates in seconds
     #[arg(short, long)]
     interval: Option<u64>,
+
+    // User agent to use for requests
+    #[arg(short, long)]
+    user_agent: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash, Debug)]
@@ -42,6 +46,8 @@ pub struct Config {
     pub discord_token: String,
     // time to wait in seconds between updates
     pub interval: u64,
+    // User agent to use with requests
+    pub user_agent: Option<String>,
 }
 
 fn get_token() -> anyhow::Result<String> {
@@ -110,6 +116,7 @@ impl Config {
                 data_dir: get_data_dir(),
                 discord_token: String::default(),
                 interval: 600,
+                user_agent: None,
             }
         };
 

@@ -252,7 +252,10 @@ impl RssFeed {
     // Create a feed item from a URL to an RSS feed,
     // Filling the title and category fields if given
     // (title defaults to title from rss feed)
-    pub fn from_url(url: impl AsRef<str>) -> anyhow::Result<Self> {
+    pub fn from_url(
+        url: impl AsRef<str>,
+        user_agent: Option<impl AsRef<str>>,
+    ) -> anyhow::Result<Self> {
         info!("Loading rss feed from {}.", url.as_ref());
         let url: Url = Url::parse(url.as_ref())?;
 
@@ -262,8 +265,17 @@ impl RssFeed {
             let bytes = {
                 let url = url.clone();
                 block_in_place(move || {
-                    Handle::current()
-                        .block_on(async move { reqwest::get(url.clone()).await?.bytes().await })
+                    Handle::current().block_on(async move {
+                        let client = if let Some(user) = user_agent {
+                            reqwest::ClientBuilder::new()
+                                .user_agent(user.as_ref())
+                                .build()?
+                        } else {
+                            reqwest::ClientBuilder::new().build()?
+                        };
+                        let req = client.get(url.clone()).build()?;
+                        client.execute(req).await?.bytes().await
+                    })
                 })
             }?;
             xml_from_reader(url.as_str(), BufReader::new(bytes.as_ref()))
@@ -334,14 +346,20 @@ mod test {
     #[test]
     fn empty_file() {
         let url = get_test_dir().join("empty.xml");
-        let feed = RssFeed::from_url(format!("file://{}", url.to_string_lossy()));
+        let feed = RssFeed::from_url(
+            format!("file://{}", url.to_string_lossy()),
+            Option::<String>::None,
+        );
         assert!(feed.is_err());
     }
 
     #[test]
     fn full_file() {
         let url = get_test_dir().join("rssboard.xml");
-        let feed = RssFeed::from_url(format!("file://{}", url.to_string_lossy()));
+        let feed = RssFeed::from_url(
+            format!("file://{}", url.to_string_lossy()),
+            Option::<String>::None,
+        );
         assert!(feed.is_ok());
         let feed = feed.unwrap();
 
