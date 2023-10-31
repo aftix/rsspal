@@ -9,7 +9,7 @@ ExecStop=/usr/bin/pkill rsspal
 User=www-data
 WorkingDirectory=/mnt/www
 EnvironmentFile=/root/rsspal-creds
-Environment="RUST_LOG=3 XDG_CONFIG_HOME=~www-data/.config XDG_DATA_HOME=~www-data/.local/share"
+Environment="RUST_LOG=3"
 
 [Install]
 WantedBy=multi-user.target

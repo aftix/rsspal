@@ -8,8 +8,6 @@ use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
 
 use serenity::framework::standard::Args;
-use tokio::fs::File;
-use tokio::io::AsyncReadExt;
 use tokio::sync::Barrier;
 use tokio::task::spawn;
 
@@ -23,7 +21,6 @@ use serenity::model::id::GuildId;
 use serenity::model::{gateway::Ready, prelude::*};
 use serenity::prelude::*;
 
-use crate::config::Config;
 use crate::feed;
 use crate::signal::{send_termination, wait_for_termination};
 use crate::update::{background_task, Command, EditArgs, COMMANDS};
@@ -531,7 +528,7 @@ pub async fn edit(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 
 #[command]
 #[description("Reload feed.")]
-#[usage("~poll [url|title]")]
+#[usage("~reload [url|title]")]
 #[max_args(1)]
 pub async fn reload(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     info!("Recieved reload command.");
@@ -715,66 +712,25 @@ pub async fn export(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[usage("~useragent [user agent]")]
 #[max_args(1)]
 pub async fn useragent(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    info!("Recieved poll command.");
+    info!("Recieved useragent command.");
     if args.remaining() == 0 {
-        let config_path = {
-            let mut config = match CONFIG.read() {
-                Err(e) => return Err(anyhow::anyhow!("Failed to read CONFIG static {}", e).into()),
-                Ok(cfg) => cfg.clone(),
-            };
-            config.user_agent = None;
-            let file = config.config_file.clone();
-            match CONFIG.write() {
-                Err(e) => return Err(anyhow::anyhow!("Failed to write CONFIG static {}", e).into()),
-                Ok(mut cfg) => *cfg = config,
-            }
-            file
+        let mut config = match CONFIG.read() {
+            Err(e) => return Err(anyhow::anyhow!("Failed to read CONFIG static {}", e).into()),
+            Ok(cfg) => cfg.clone(),
         };
 
-        match File::open(&config_path).await {
-            Err(e) => {
-                warn!("Could not open configuration file: {}", e);
-                return Err(anyhow::anyhow!("Could not open configuration file: {}", e).into());
-            }
-            Ok(mut f) => {
-                let mut s = String::new();
-                if let Err(e) = f.read_to_string(&mut s).await {
-                    warn!("Could not read configuration file: {}", e);
-                    return Err(anyhow::anyhow!("Could not read configuration file: {}", e).into());
-                }
-
-                let mut cfg: Config = match toml::from_str(&s) {
-                    Err(e) => {
-                        warn!("Could not deserialize configuration file: {}", e);
-                        return Err(anyhow::anyhow!(
-                            "Could not deserialize configuration file: {}",
-                            e
-                        )
-                        .into());
-                    }
-                    Ok(c) => c,
-                };
-
-                cfg.user_agent = None;
-                cfg.config_file = config_path;
-
-                match cfg.save() {
-                    Ok(_) => (),
-                    Err(e) => {
-                        warn!("Error saving configuration file: {}", e);
-                        return Err(
-                            anyhow::anyhow!("Error saving configuration file: {}", e).into()
-                        );
-                    }
-                }
-            }
-        };
+        config.user_agent = None;
+        match CONFIG.write() {
+            Err(e) => return Err(anyhow::anyhow!("Failed to write CONFIG static {}", e).into()),
+            Ok(mut cfg) => cfg.user_agent = None,
+        }
 
         info!("Cleared user agent.");
         if let Err(e) = msg.reply(ctx, "Cleared user agent string.").await {
             warn!("Failed to reply to message {}: {}", msg.id.0, e);
         }
-        return Ok(());
+
+        return config.save().map_err(|e| e.into());
     }
 
     match args.parse::<String>() {
@@ -798,62 +754,22 @@ pub async fn useragent(ctx: &Context, msg: &Message, args: Args) -> CommandResul
             }
         },
         Ok(user_agent) => {
-            let config_path = {
-                let mut config = match CONFIG.read() {
-                    Err(e) => {
-                        return Err(anyhow::anyhow!("Failed to read CONFIG static {}", e).into())
-                    }
-                    Ok(cfg) => cfg.clone(),
-                };
-                config.user_agent = Some(user_agent.clone());
-                let file = config.config_file.clone();
-                match CONFIG.write() {
-                    Err(e) => {
-                        return Err(anyhow::anyhow!("Failed to write CONFIG static {}", e).into())
-                    }
-                    Ok(mut cfg) => *cfg = config,
-                }
-                file
+            let mut config = match CONFIG.read() {
+                Err(e) => return Err(anyhow::anyhow!("Failed to read CONFIG static {}", e).into()),
+                Ok(cfg) => cfg.clone(),
             };
 
-            match File::open(&config_path).await {
-                Err(e) => {
-                    warn!("Could not open configuration file: {}", e);
-                    Err(anyhow::anyhow!("Could not open configuration file: {}", e).into())
-                }
-                Ok(mut f) => {
-                    let mut s = String::new();
-                    if let Err(e) = f.read_to_string(&mut s).await {
-                        warn!("Could not read configuration file: {}", e);
-                        return Err(
-                            anyhow::anyhow!("Could not read configuration file: {}", e).into()
-                        );
-                    }
-
-                    let mut cfg: Config = match toml::from_str(&s) {
-                        Err(e) => {
-                            warn!("Could not deserialize configuration file: {}", e);
-                            return Err(anyhow::anyhow!(
-                                "Could not deserialize configuration file: {}",
-                                e
-                            )
-                            .into());
-                        }
-                        Ok(c) => c,
-                    };
-
-                    cfg.user_agent = Some(user_agent);
-                    cfg.config_file = config_path;
-
-                    match cfg.save() {
-                        Ok(_) => Ok(()),
-                        Err(e) => {
-                            warn!("Error saving configuration file: {}", e);
-                            Err(anyhow::anyhow!("Error saving configuration file: {}", e).into())
-                        }
-                    }
-                }
+            config.user_agent = Some(user_agent.clone());
+            match CONFIG.write() {
+                Err(e) => return Err(anyhow::anyhow!("Failed to write CONFIG static {}", e).into()),
+                Ok(mut cfg) => cfg.user_agent = Some(user_agent),
             }
+
+            if let Err(e) = msg.reply(ctx, "User agent string set").await {
+                warn!("Failed to reply to message {}: {}", msg.id.0, e);
+            }
+
+            config.save().map_err(|e| e.into())
         }
     }
 }
@@ -881,62 +797,22 @@ pub async fn poll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             }
         }
         Ok(interval) => {
-            let config_path = {
-                let mut config = match CONFIG.read() {
-                    Err(e) => {
-                        return Err(anyhow::anyhow!("Failed to read CONFIG static {}", e).into())
-                    }
-                    Ok(cfg) => cfg.clone(),
-                };
-                config.interval = interval;
-                let file = config.config_file.clone();
-                match CONFIG.write() {
-                    Err(e) => {
-                        return Err(anyhow::anyhow!("Failed to write CONFIG static {}", e).into())
-                    }
-                    Ok(mut cfg) => *cfg = config,
-                }
-                file
+            let mut config = match CONFIG.read() {
+                Err(e) => return Err(anyhow::anyhow!("Failed to read CONFIG static {}", e).into()),
+                Ok(cfg) => cfg.clone(),
             };
 
-            match File::open(&config_path).await {
-                Err(e) => {
-                    warn!("Could not open configuration file: {}", e);
-                    Err(anyhow::anyhow!("Could not open configuration file: {}", e).into())
-                }
-                Ok(mut f) => {
-                    let mut s = String::new();
-                    if let Err(e) = f.read_to_string(&mut s).await {
-                        warn!("Could not read configuration file: {}", e);
-                        return Err(
-                            anyhow::anyhow!("Could not read configuration file: {}", e).into()
-                        );
-                    }
-
-                    let mut cfg: Config = match toml::from_str(&s) {
-                        Err(e) => {
-                            warn!("Could not deserialize configuration file: {}", e);
-                            return Err(anyhow::anyhow!(
-                                "Could not deserialize configuration file: {}",
-                                e
-                            )
-                            .into());
-                        }
-                        Ok(c) => c,
-                    };
-
-                    cfg.interval = interval;
-                    cfg.config_file = config_path;
-
-                    match cfg.save() {
-                        Ok(_) => Ok(()),
-                        Err(e) => {
-                            warn!("Error saving configuration file: {}", e);
-                            Err(anyhow::anyhow!("Error saving configuration file: {}", e).into())
-                        }
-                    }
-                }
+            config.interval = interval;
+            match CONFIG.write() {
+                Err(e) => return Err(anyhow::anyhow!("Failed to write CONFIG static {}", e).into()),
+                Ok(mut cfg) => cfg.interval = interval,
             }
+
+            if let Err(e) = msg.reply(ctx, "Poll interval set.").await {
+                warn!("Failed to reply to message {}: {}", msg.id.0, e);
+            }
+
+            config.save().map_err(|e| e.into())
         }
     }
 }
