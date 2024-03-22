@@ -1,12 +1,8 @@
-use std::sync::RwLock;
-
+use lazy_static::lazy_static;
 use serenity::framework::StandardFramework;
 use serenity::prelude::*;
-
-use lazy_static::lazy_static;
-
-#[cfg(not(debug_assertions))]
-use systemd_journal_logger::JournalLog;
+use std::sync::RwLock;
+use tracing_subscriber::{prelude::*, EnvFilter, Registry};
 
 mod admin_commands;
 mod config;
@@ -26,17 +22,16 @@ lazy_static! {
 async fn main() -> anyhow::Result<()> {
     signal::mask_signals().map_err(|e| anyhow::anyhow!("SIG_UNBLOCK sigprocmask errno: {}", e))?;
 
-    #[cfg(debug_assertions)]
-    {
-        pretty_env_logger::init();
-    }
-
-    #[cfg(not(debug_assertions))]
-    {
-        JournalLog::default()
-            .install()
-            .expect("Failed to initialize JournalLog");
-    }
+    let console_layer = console_subscriber::spawn();
+    Registry::default()
+        .with(
+            tracing_subscriber::fmt::layer()
+                .pretty()
+                .with_filter(EnvFilter::from_default_env()),
+        )
+        .with(tracing_journald::layer()?)
+        .with(console_layer)
+        .init();
 
     let token = match CONFIG.read() {
         Err(e) => {

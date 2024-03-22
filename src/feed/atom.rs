@@ -1,20 +1,14 @@
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-
-use log::{debug, info};
-
-use serenity::builder::CreateEmbed;
-
-use tokio::runtime::Handle;
-use tokio::task::block_in_place;
-
 use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
-
-use serde::{Deserialize, Serialize};
-
 use quick_xml::de::from_reader;
-
 use reqwest::{self, Url};
+use serde::{Deserialize, Serialize};
+use serenity::builder::CreateEmbed;
+use std::{
+    fs::File,
+    io::{BufRead, BufReader},
+};
+use tokio::{runtime::Handle, task::block_in_place};
+use tracing::{debug, info, instrument};
 
 // Atom Feed file
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]
@@ -143,6 +137,7 @@ impl Entry {
         }
     }
 
+    #[instrument(level = "debug")]
     pub fn to_embed(&self) -> impl Fn(&mut CreateEmbed) -> &mut CreateEmbed {
         let author = self.author.clone();
         let description = self.summary.clone();
@@ -227,6 +222,7 @@ impl AtomFeed {
     // Create a feed item from a URL to an RSS feed,
     // Filling the title and category fields if given
     // (title defaults to title from rss feed)
+    #[instrument(level = "debug", skip(url, user_agent))]
     pub fn from_url(
         url: impl AsRef<str>,
         user_agent: Option<impl AsRef<str>>,
@@ -267,6 +263,7 @@ impl AtomFeed {
     }
 
     // Use metadata on channel to figure out if it's time to update
+    #[instrument(level = "trace")]
     pub fn should_update(&self) -> bool {
         if let Some(last_update) = self.last_updated {
             let now = chrono::offset::Utc::now();

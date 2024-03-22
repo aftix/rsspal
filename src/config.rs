@@ -1,13 +1,12 @@
-use std::env;
-use std::fs::{create_dir_all, File};
-use std::io::{Read, Write};
-use std::path::PathBuf;
-
-use serde::{Deserialize, Serialize};
-
-use log::{debug, error, info};
-
 use clap::Parser;
+use serde::{Deserialize, Serialize};
+use std::{
+    env,
+    fs::{create_dir_all, File},
+    io::{Read, Write},
+    path::PathBuf,
+};
+use tracing::{debug, error, info, instrument};
 
 #[derive(Clone, PartialEq, Eq, Hash, Parser)]
 #[command(name = "rsspal")]
@@ -158,6 +157,7 @@ impl Config {
         Ok(config)
     }
 
+    #[instrument]
     pub fn save(&self) -> anyhow::Result<()> {
         info!("Saving configuration file to {:?}", self.config_file);
         let out_str = toml::to_string_pretty(self)?;

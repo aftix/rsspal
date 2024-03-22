@@ -1,17 +1,16 @@
-use std::collections::HashSet;
-use std::sync::{Arc, OnceLock};
-
-use log::{debug, error, info, warn};
-
-use serenity::model::prelude::*;
-use serenity::prelude::*;
-
-use tokio::runtime::Handle;
-use tokio::sync::{mpsc, Barrier};
-use tokio::task::JoinSet;
-use tokio::time::{sleep_until, Duration, Instant};
-
 use quick_xml::{de, se};
+use serenity::{model::prelude::*, prelude::*};
+use std::{
+    collections::HashSet,
+    sync::{Arc, OnceLock},
+};
+use tokio::{
+    runtime::Handle,
+    sync::{mpsc, Barrier},
+    task::JoinSet,
+    time::{sleep_until, Duration, Instant},
+};
+use tracing::{debug, error, info, instrument, warn};
 
 use crate::discord;
 use crate::feed::{self, Feed};
@@ -41,6 +40,7 @@ pub struct EditArgs {
 }
 
 // Run in background, configuring server and updating feeds, etc
+#[instrument(skip(ctx))]
 pub async fn background_task(feeds: Vec<Feed>, ctx: Context) -> anyhow::Result<()> {
     let feeds = Arc::new(RwLock::new(feeds));
     let (sender, mut commands) = mpsc::channel(8);
@@ -73,7 +73,7 @@ pub async fn background_task(feeds: Vec<Feed>, ctx: Context) -> anyhow::Result<(
                         let feeds = feeds.clone();
                         let ctx = ctx.clone();
                         Handle::current().spawn(async move {
-                            let processed = process_command(cmd, &ctx, feeds).await;
+                            let processed = process_command(cmd, feeds, &ctx).await;
                             wait.wait().await;
                             if let Err(e) = spawned_sender.send(processed).await {
                                 error!("Failed to send processed command on channel: {}", e);
@@ -97,12 +97,14 @@ pub async fn background_task(feeds: Vec<Feed>, ctx: Context) -> anyhow::Result<(
     Ok(())
 }
 
+#[instrument(skip(feeds))]
 async fn remove_feed(idx: usize, feeds: impl AsRef<RwLock<Vec<Feed>>>) {
     let mut guard = feeds.as_ref().write().await;
     let feeds: &mut Vec<Feed> = guard.as_mut();
     feeds.remove(idx);
 }
 
+#[instrument(skip(feeds, ctx))]
 async fn add_feeds(new: Vec<Feed>, feeds: impl AsRef<RwLock<Vec<Feed>>>, ctx: &Context) {
     discord::setup_channels(&new, ctx).await;
 
@@ -135,7 +137,8 @@ async fn add_feeds(new: Vec<Feed>, feeds: impl AsRef<RwLock<Vec<Feed>>>, ctx: &C
     }
 }
 
-async fn process_command(cmd: Command, ctx: &Context, feeds: Arc<RwLock<Vec<Feed>>>) -> Option<()> {
+#[instrument(skip(feeds, ctx))]
+async fn process_command(cmd: Command, feeds: Arc<RwLock<Vec<Feed>>>, ctx: &Context) -> Option<()> {
     match cmd {
         Command::AddFeed(feed) => {
             info!("Adding feed {}.", feed.title());
@@ -466,6 +469,7 @@ async fn process_command(cmd: Command, ctx: &Context, feeds: Arc<RwLock<Vec<Feed
     None
 }
 
+#[instrument(skip(ctx))]
 async fn diff_feed(update: Feed, feeds: &mut [Feed], ctx: &Context) {
     let feed = feeds.iter_mut().find(|f| f.url() == update.url());
     if let Some(mut feed) = feed {
@@ -549,6 +553,7 @@ async fn diff_feed(update: Feed, feeds: &mut [Feed], ctx: &Context) {
     }
 }
 
+#[instrument(skip(ctx))]
 async fn update_feeds(feeds: &mut [Feed], force: bool, ctx: &Context) {
     info!("Updating feeds");
     let mut futures = JoinSet::new();
@@ -580,6 +585,7 @@ async fn update_feeds(feeds: &mut [Feed], force: bool, ctx: &Context) {
     }
 }
 
+#[instrument]
 async fn exit_feeds_loop(feeds: &[Feed]) -> anyhow::Result<()> {
     debug!("Exiting the background loop");
 
