@@ -1,18 +1,10 @@
+use lazy_static::lazy_static;
+use regex::{Regex, RegexSet};
+use serenity::{builder::CreateEmbed, model::prelude::*, prelude::*};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-
-use regex::{Regex, RegexSet};
-
-use log::{debug, error, info, warn};
-
-use serenity::builder::CreateEmbed;
-use serenity::model::prelude::*;
-use serenity::prelude::*;
-
-use lazy_static::lazy_static;
-
-use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
+use tokio::{fs::File, io::AsyncWriteExt};
+use tracing::{debug, error, info, instrument, warn};
 
 use crate::admin_commands::GUILDS;
 use crate::feed::atom::Entry;
@@ -41,6 +33,7 @@ pub fn title_to_channel_name(s: impl AsRef<str>) -> String {
     truncate(&s, 95).to_lowercase().to_string()
 }
 
+#[instrument(skip(ctx, channel_name), level = "debug")]
 async fn mark(
     guild_id: GuildId,
     msg: Message,
@@ -98,6 +91,7 @@ async fn mark(
     Ok(())
 }
 
+#[instrument(skip(ctx), level = "debug")]
 pub async fn mark_read(guild_id: GuildId, msg: Message, ctx: &Context) -> anyhow::Result<()> {
     mark(
         guild_id,
@@ -109,6 +103,7 @@ pub async fn mark_read(guild_id: GuildId, msg: Message, ctx: &Context) -> anyhow
     .await
 }
 
+#[instrument(skip(ctx), level = "debug")]
 pub async fn mark_unread(guild_id: GuildId, msg: Message, ctx: &Context) -> anyhow::Result<()> {
     mark(
         guild_id,
@@ -125,6 +120,7 @@ pub async fn mark_unread(guild_id: GuildId, msg: Message, ctx: &Context) -> anyh
     .await
 }
 
+#[instrument(skip(ctx), level = "debug")]
 pub async fn send_str_as_file_reply(msg: Message, text: String, ctx: &Context) {
     let channel = match msg.channel(ctx).await {
         Ok(chan) => chan,
@@ -196,6 +192,7 @@ pub async fn send_str_as_file_reply(msg: Message, text: String, ctx: &Context) {
 }
 
 // Returns index of feed to remove in feeds
+#[instrument(skip(ctx))]
 pub async fn remove_feed(msg: Message, id: &str, feeds: &[Feed], ctx: &Context) -> Option<usize> {
     let channel_name = title_to_channel_name(id);
     let location = feeds.iter().enumerate().find_map(|(idx, feed)| {
@@ -250,6 +247,7 @@ pub async fn remove_feed(msg: Message, id: &str, feeds: &[Feed], ctx: &Context) 
     Some(location)
 }
 
+#[instrument(skip(ctx))]
 pub async fn publish_atom_entry(
     feed_name: &str,
     entry: &Entry,
@@ -308,6 +306,7 @@ pub async fn publish_atom_entry(
     Ok(())
 }
 
+#[instrument(skip(ctx))]
 pub async fn publish_rss_item(
     feed_name: &str,
     item: &RssItem,
@@ -364,8 +363,8 @@ pub async fn publish_rss_item(
     Ok(())
 }
 
+#[instrument(skip(ctx))]
 pub async fn setup_channels(feeds: &[Feed], ctx: &Context) {
-    info!("Setting up discord servers to fit read roles.");
     let guilds = {
         if let Some(g) = GUILDS.get() {
             g.clone()
@@ -451,6 +450,7 @@ pub async fn setup_channels(feeds: &[Feed], ctx: &Context) {
 type NameMap = HashMap<String, GuildChannel>;
 type IdMap = HashMap<ChannelId, GuildChannel>;
 
+#[instrument(skip(ctx))]
 async fn setup_channel_category(
     guild_id: u64,
     name: Option<String>,
@@ -488,6 +488,7 @@ async fn setup_channel_category(
     }
 }
 
+#[instrument(skip(ctx), level = "debug")]
 async fn remove_empty_categories(guild: &GuildId, channels: &[GuildChannel], ctx: &Context) {
     let parents: HashSet<_> = channels.iter().filter_map(|c| c.parent_id).collect();
     let empty_categories: Vec<_> = channels
@@ -507,6 +508,7 @@ async fn remove_empty_categories(guild: &GuildId, channels: &[GuildChannel], ctx
 }
 
 // Optionally returns new (feed channel, feed channel thread)
+#[instrument(skip(ctx), level = "debug")]
 async fn update_channel_metadata(
     channel: &GuildChannel,
     feed: &Feed,
@@ -600,6 +602,7 @@ async fn update_channel_metadata(
 }
 
 // Optionally returns new (feed channel, feed channel thread)
+#[instrument(skip(ctx))]
 async fn create_channel(
     guild_id: u64,
     feed: &Feed,

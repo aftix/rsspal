@@ -1,25 +1,21 @@
-use std::collections::HashSet;
-use std::sync::{Arc, OnceLock};
-
-use regex::Regex;
-
 use lazy_static::lazy_static;
-
-use log::{debug, error, info, warn};
-
-use serenity::framework::standard::Args;
-use tokio::sync::Barrier;
-use tokio::task::spawn;
-
-use serenity::async_trait;
-use serenity::framework::standard::{
-    help_commands,
-    macros::{command, group, help},
-    CommandError, CommandGroup, CommandResult, HelpOptions,
+use regex::Regex;
+use serenity::{
+    async_trait,
+    framework::standard::{
+        help_commands,
+        macros::{command, group, help},
+        Args, CommandError, CommandGroup, CommandResult, HelpOptions,
+    },
+    model::{gateway::Ready, id::GuildId, prelude::*},
+    prelude::*,
 };
-use serenity::model::id::GuildId;
-use serenity::model::{gateway::Ready, prelude::*};
-use serenity::prelude::*;
+use std::{
+    collections::HashSet,
+    sync::{Arc, OnceLock},
+};
+use tokio::{sync::Barrier, task::spawn};
+use tracing::{debug, error, info, info_span, instrument, warn, Instrument};
 
 use crate::feed;
 use crate::signal::{send_termination, wait_for_termination};
@@ -33,6 +29,7 @@ pub static USER_ID: OnceLock<UserId> = OnceLock::new();
 #[commands(ping, exit, add, remove, poll, edit, reload, export, import, useragent)]
 pub struct Admin;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Handler;
 
 #[help]
@@ -51,8 +48,8 @@ async fn help(
 #[async_trait]
 impl EventHandler for Handler {
     // Real main function since everything needs access to the context
+    #[instrument(skip(ctx))]
     async fn ready(&self, ctx: Context, ready: Ready) {
-        debug!("serenity discord client is ready");
         let ids: Vec<_> = ready.guilds.iter().map(|guild| guild.id).collect();
         GUILDS
             .set(ids)
@@ -63,11 +60,11 @@ impl EventHandler for Handler {
 
         // Get the stored database
         let feeds = feed::import().await.expect("Failed to import feeds.");
-
+        let handle = spawn(
+            background_task(feeds.clone(), ctx.clone()).instrument(info_span!("background_task")),
+        );
+        drop(handle);
         discord::setup_channels(&feeds, &ctx).await;
-
-        debug!("spawning background task");
-        spawn(background_task(feeds, ctx.clone()));
 
         ctx.online().await;
         info!("{} is ready.", ready.user.name);
@@ -92,6 +89,7 @@ impl EventHandler for Handler {
     }
 
     // Handle marking items read/unread on reaction
+    #[instrument(skip(ctx))]
     async fn reaction_add(&self, ctx: Context, reaction: Reaction) {
         debug!("Recieved reaction emote to message event.");
         let current_user = *USER_ID.get().expect("failed to get USER_ID static");
@@ -209,19 +207,23 @@ impl EventHandler for Handler {
 #[num_args(0)]
 #[description("Gracefully shutdown the bot.")]
 pub async fn exit(_ctx: &Context, _msg: &Message) -> CommandResult {
-    info!("Recieved exit command.");
-    send_termination().await.map_err(CommandError::from)
+    (async { send_termination().await.map_err(CommandError::from) })
+        .instrument(info_span!("~exit"))
+        .await
 }
 
 #[command]
 #[num_args(0)]
 #[description("Check connectivity with a ping pong.")]
 pub async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
-    info!("Recieved ping command.");
-    msg.channel_id
-        .send_message(&ctx.http, |create| create.content("Pong!"))
-        .await?;
-    Ok(())
+    (async {
+        msg.channel_id
+            .send_message(&ctx.http, |create| create.content("Pong!"))
+            .await?;
+        Ok(())
+    })
+    .instrument(info_span!("~ping"))
+    .await
 }
 
 #[command]
@@ -230,81 +232,84 @@ pub async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
 #[min_args(1)]
 #[max_args(2)]
 pub async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    info!("Recieved add command");
-    let url: String = match args.single() {
-        Err(e) => {
-            info!(
-                "Add command used without correct format ({}): {} ",
-                e, msg.content
-            );
-            match msg.reply(ctx, "Incorrect command usage.").await {
-                Err(err) => {
-                    error!(
-                        "Error replying to message {}: {} and parsing command: {}",
-                        msg.id.0, err, e
-                    );
-                    return Err(anyhow::anyhow!(
-                        "error replying to message {}: {} and parsing command: {}",
-                        msg.id.0,
-                        err,
-                        e
-                    )
-                    .into());
-                }
-                Ok(_) => return Err(anyhow::anyhow!("error parsing arguments: {}", e).into()),
-            }
-        }
-        Ok(arg) => arg,
-    };
-
-    let title: Option<String> = args.single().ok();
-
-    let user_agent = CONFIG
-        .read()
-        .expect("failed to get CONFIG static")
-        .user_agent
-        .clone();
-
-    match feed::from_url(&url, title, None, user_agent) {
-        Err(e) => {
-            match msg
-                .reply(ctx, &format!("Failed to load feed from {}: {}", url, e))
-                .await
-            {
-                Err(err) => {
-                    error!(
-                        "Failed loading feed from {}: {} and sending reply to {}: {}",
-                        url, e, msg.id.0, err
-                    );
-                    Err(anyhow::anyhow!(
-                        "Failed loading feed from {}: {} and sending reply to {}: {}",
-                        url,
-                        e,
-                        msg.id.0,
-                        err
-                    )
-                    .into())
-                }
-                _ => {
-                    error!("Failed loading feed from {}: {}", url, e);
-                    Err(anyhow::anyhow!("Failed loading feed from {}: {}", url, e).into())
+    (async {
+        let url: String = match args.single() {
+            Err(e) => {
+                info!(
+                    "Add command used without correct format ({}): {} ",
+                    e, msg.content
+                );
+                match msg.reply(ctx, "Incorrect command usage.").await {
+                    Err(err) => {
+                        error!(
+                            "Error replying to message {}: {} and parsing command: {}",
+                            msg.id.0, err, e
+                        );
+                        return Err(anyhow::anyhow!(
+                            "error replying to message {}: {} and parsing command: {}",
+                            msg.id.0,
+                            err,
+                            e
+                        )
+                        .into());
+                    }
+                    Ok(_) => return Err(anyhow::anyhow!("error parsing arguments: {}", e).into()),
                 }
             }
-        }
-        Ok(feed) => {
-            let barrier = Arc::new(Barrier::new(2));
-            let send = COMMANDS.get().expect("failed to get COMMANDS static");
-            if let Err(e) = send
-                .send((Command::AddFeed(Box::new(feed)), barrier.clone()))
-                .await
-            {
-                error!("Failed to send command: {}", e);
-                return Err(anyhow::anyhow!("failed to send command: {}", e).into());
+            Ok(arg) => arg,
+        };
+
+        let title: Option<String> = args.single().ok();
+
+        let user_agent = CONFIG
+            .read()
+            .expect("failed to get CONFIG static")
+            .user_agent
+            .clone();
+
+        match feed::from_url(&url, title, None, user_agent).await {
+            Err(e) => {
+                match msg
+                    .reply(ctx, &format!("Failed to load feed from {}: {}", url, e))
+                    .await
+                {
+                    Err(err) => {
+                        error!(
+                            "Failed loading feed from {}: {} and sending reply to {}: {}",
+                            url, e, msg.id.0, err
+                        );
+                        Err(anyhow::anyhow!(
+                            "Failed loading feed from {}: {} and sending reply to {}: {}",
+                            url,
+                            e,
+                            msg.id.0,
+                            err
+                        )
+                        .into())
+                    }
+                    _ => {
+                        error!("Failed loading feed from {}: {}", url, e);
+                        Err(anyhow::anyhow!("Failed loading feed from {}: {}", url, e).into())
+                    }
+                }
             }
-            barrier.wait().await;
-            Ok(())
+            Ok(feed) => {
+                let barrier = Arc::new(Barrier::new(2));
+                let send = COMMANDS.get().expect("failed to get COMMANDS static");
+                if let Err(e) = send
+                    .send((Command::AddFeed(Box::new(feed)), barrier.clone()))
+                    .await
+                {
+                    error!("Failed to send command: {}", e);
+                    return Err(anyhow::anyhow!("failed to send command: {}", e).into());
+                }
+                barrier.wait().await;
+                Ok(())
+            }
         }
-    }
+    })
+    .instrument(info_span!("~add"))
+    .await
 }
 
 #[command]
@@ -312,65 +317,69 @@ pub async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
 #[usage("~remove <url|title>")]
 #[num_args(1)]
 pub async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    info!("Recieved remove command.");
-    let id: String = match args.parse() {
-        Err(e) => {
-            error!(
-                "Add command used without proper form ({}): {}",
-                e, msg.content,
-            );
-            match msg.reply(ctx, "Incorrect command usage.").await {
+    (async {
+        let id: String = match args.parse() {
+            Err(e) => {
+                error!(
+                    "Add command used without proper form ({}): {}",
+                    e, msg.content,
+                );
+                match msg.reply(ctx, "Incorrect command usage.").await {
+                    Err(err) => {
+                        error!(
+                            "Error replying to message {}: {} and parsing command: {}",
+                            msg.id.0, err, e
+                        );
+                        return Err(anyhow::anyhow!(
+                            "Error replying to message {}: {} and parsing command: {}",
+                            msg.id.0,
+                            err,
+                            e
+                        )
+                        .into());
+                    }
+                    Ok(_) => return Err(anyhow::anyhow!("error parsing arguments: {}", e).into()),
+                }
+            }
+            Ok(s) => s,
+        };
+
+        let barrier = Arc::new(Barrier::new(2));
+        let send = COMMANDS.get().expect("failed to get COMMANDS static");
+        if let Err(e) = send
+            .send((Command::RemoveFeed(msg.clone(), id), barrier.clone()))
+            .await
+        {
+            error!("Failed to send command: {}", e);
+            match msg.reply(ctx, "Internal error").await {
                 Err(err) => {
                     error!(
-                        "Error replying to message {}: {} and parsing command: {}",
-                        msg.id.0, err, e
+                        "Failed to send command: {} and reply to message {}: {}",
+                        e, msg.id.0, err
                     );
                     return Err(anyhow::anyhow!(
-                        "Error replying to message {}: {} and parsing command: {}",
+                        "Failed to send command: {} and reply to message {}: {}",
+                        e,
                         msg.id.0,
-                        err,
-                        e
+                        err
                     )
                     .into());
                 }
-                Ok(_) => return Err(anyhow::anyhow!("error parsing arguments: {}", e).into()),
+                Ok(_) => {
+                    error!("Failed to send command: {}", e);
+                    return Err(anyhow::anyhow!("Failed to send command: {}", e).into());
+                }
             }
         }
-        Ok(s) => s,
-    };
 
-    let barrier = Arc::new(Barrier::new(2));
-    let send = COMMANDS.get().expect("failed to get COMMANDS static");
-    if let Err(e) = send
-        .send((Command::RemoveFeed(msg.clone(), id), barrier.clone()))
-        .await
-    {
-        error!("Failed to send command: {}", e);
-        match msg.reply(ctx, "Internal error").await {
-            Err(err) => {
-                error!(
-                    "Failed to send command: {} and reply to message {}: {}",
-                    e, msg.id.0, err
-                );
-                return Err(anyhow::anyhow!(
-                    "Failed to send command: {} and reply to message {}: {}",
-                    e,
-                    msg.id.0,
-                    err
-                )
-                .into());
-            }
-            Ok(_) => {
-                error!("Failed to send command: {}", e);
-                return Err(anyhow::anyhow!("Failed to send command: {}", e).into());
-            }
-        }
-    }
-
-    barrier.wait().await;
-    Ok(())
+        barrier.wait().await;
+        Ok(())
+    })
+    .instrument(info_span!("~remove"))
+    .await
 }
 
+#[instrument(level = "trace")]
 fn parse_edit_args(raw_args: &[String]) -> anyhow::Result<EditArgs> {
     lazy_static! {
         static ref SPACE_REGEX: Regex = Regex::new(r"\s+").unwrap();
@@ -405,44 +414,16 @@ fn parse_edit_args(raw_args: &[String]) -> anyhow::Result<EditArgs> {
 #[usage("~edit <feed> <KEY=VALUE>...")]
 #[min_args(2)]
 pub async fn edit(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    info!("Recieved edit command.");
-    let id: String = match args.parse() {
-        Err(e) => match msg.reply(ctx, "Failed to parse first argument.").await {
-            Err(err) => {
-                warn!(
-                    "Failed to parse first argument to edit: {} and reply to message {}: {}",
-                    e, msg.id.0, err
-                );
-                return Err(anyhow::anyhow!(
-                    "Failed to parse first argument to edit: {} and reply to message {}: {}",
-                    e,
-                    msg.id.0,
-                    err
-                )
-                .into());
-            }
-            Ok(_) => {
-                warn!("Failed to parse first argumnet to edit: {}", e);
-                return Err(
-                    anyhow::anyhow!("Failed to parse first argumnet to edit: {}", e).into(),
-                );
-            }
-        },
-        Ok(s) => s,
-    };
-    args.advance();
-
-    let mut keyvals = Vec::with_capacity(args.len());
-    while !args.is_empty() {
-        let keyval: String = match args.parse() {
+    (async {
+        let id: String = match args.parse() {
             Err(e) => match msg.reply(ctx, "Failed to parse first argument.").await {
                 Err(err) => {
                     warn!(
-                        "Failed to parse argument to edit: {} and reply to message {}: {}",
+                        "Failed to parse first argument to edit: {} and reply to message {}: {}",
                         e, msg.id.0, err
                     );
                     return Err(anyhow::anyhow!(
-                        "Failed to parse argument to edit: {} and reply to message {}: {}",
+                        "Failed to parse first argument to edit: {} and reply to message {}: {}",
                         e,
                         msg.id.0,
                         err
@@ -458,72 +439,105 @@ pub async fn edit(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
             },
             Ok(s) => s,
         };
-        keyvals.push(keyval);
         args.advance();
-    }
 
-    if keyvals.is_empty() {
-        match msg.reply(ctx, "No attributes given to edit.").await {
+        let mut keyvals = Vec::with_capacity(args.len());
+        while !args.is_empty() {
+            let keyval: String = match args.parse() {
+                Err(e) => match msg.reply(ctx, "Failed to parse first argument.").await {
+                    Err(err) => {
+                        warn!(
+                            "Failed to parse argument to edit: {} and reply to message {}: {}",
+                            e, msg.id.0, err
+                        );
+                        return Err(anyhow::anyhow!(
+                            "Failed to parse argument to edit: {} and reply to message {}: {}",
+                            e,
+                            msg.id.0,
+                            err
+                        )
+                        .into());
+                    }
+                    Ok(_) => {
+                        warn!("Failed to parse first argumnet to edit: {}", e);
+                        return Err(anyhow::anyhow!(
+                            "Failed to parse first argumnet to edit: {}",
+                            e
+                        )
+                        .into());
+                    }
+                },
+                Ok(s) => s,
+            };
+            keyvals.push(keyval);
+            args.advance();
+        }
+
+        if keyvals.is_empty() {
+            match msg.reply(ctx, "No attributes given to edit.").await {
+                Err(e) => {
+                    warn!(
+                        "No attributes given to edit and failed to reply to message {}: {}.",
+                        msg.id.0, e
+                    );
+                    return Err(anyhow::anyhow!(
+                        "No attributes given to edit and failed to reply to message {}: {}.",
+                        msg.id.0,
+                        e
+                    )
+                    .into());
+                }
+                Ok(_) => {
+                    warn!("No attributes given to edit.");
+                    return Err(anyhow::anyhow!("No attributes given to edit.").into());
+                }
+            }
+        }
+
+        let edit_args = match parse_edit_args(&keyvals) {
             Err(e) => {
-                warn!(
-                    "No attributes given to edit and failed to reply to message {}: {}.",
-                    msg.id.0, e
-                );
-                return Err(anyhow::anyhow!(
-                    "No attributes given to edit and failed to reply to message {}: {}.",
-                    msg.id.0,
-                    e
-                )
-                .into());
+                error!("Failed to parse the arguments to ~edit: {}.", e);
+                return Err(anyhow::anyhow!(e).into());
             }
-            Ok(_) => {
-                warn!("No attributes given to edit.");
-                return Err(anyhow::anyhow!("No attributes given to edit.").into());
+            Ok(args) => args,
+        };
+
+        let send = COMMANDS.get().expect("failed to get COMMANDS static");
+        let barrier = Arc::new(Barrier::new(2));
+        if let Err(e) = send
+            .send((
+                Command::EditFeed(msg.clone(), id, edit_args),
+                barrier.clone(),
+            ))
+            .await
+        {
+            error!("Failed to send on COMMANDS channel: {}", e);
+            match msg.reply(ctx, "Internal error").await {
+                Err(err) => {
+                    error!(
+                        "Failed to send command: {} and reply to message {}: {}",
+                        e, msg.id.0, err
+                    );
+                    return Err(anyhow::anyhow!(
+                        "Failed to send command: {} and reply to message {}: {}",
+                        e,
+                        msg.id.0,
+                        err
+                    )
+                    .into());
+                }
+                Ok(_) => {
+                    error!("Failed to send command: {}", e);
+                    return Err(anyhow::anyhow!("Failed to send command: {}", e).into());
+                }
             }
         }
-    }
 
-    let edit_args = match parse_edit_args(&keyvals) {
-        Err(e) => {
-            error!("Failed to parse the arguments to ~edit: {}.", e);
-            return Err(anyhow::anyhow!(e).into());
-        }
-        Ok(args) => args,
-    };
-
-    let send = COMMANDS.get().expect("failed to get COMMANDS static");
-    let barrier = Arc::new(Barrier::new(2));
-    if let Err(e) = send
-        .send((
-            Command::EditFeed(msg.clone(), id, edit_args),
-            barrier.clone(),
-        ))
-        .await
-    {
-        error!("Failed to send on COMMANDS channel: {}", e);
-        match msg.reply(ctx, "Internal error").await {
-            Err(err) => {
-                error!(
-                    "Failed to send command: {} and reply to message {}: {}",
-                    e, msg.id.0, err
-                );
-                return Err(anyhow::anyhow!(
-                    "Failed to send command: {} and reply to message {}: {}",
-                    e,
-                    msg.id.0,
-                    err
-                )
-                .into());
-            }
-            Ok(_) => {
-                error!("Failed to send command: {}", e);
-                return Err(anyhow::anyhow!("Failed to send command: {}", e).into());
-            }
-        }
-    }
-
-    barrier.wait().await;
-    Ok(())
+        barrier.wait().await;
+        Ok(())
+    })
+    .instrument(info_span!("~edit"))
+    .await
 }
 
 #[command]
@@ -531,19 +545,52 @@ pub async fn edit(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 #[usage("~reload [url|title]")]
 #[max_args(1)]
 pub async fn reload(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    info!("Recieved reload command.");
-    let id = if args.is_empty() {
-        None
-    } else {
-        match args.parse::<String>() {
-            Err(e) => match msg.reply(ctx, "Failed to parse argument.").await {
+    (async {
+        let id = if args.is_empty() {
+            None
+        } else {
+            match args.parse::<String>() {
+                Err(e) => match msg.reply(ctx, "Failed to parse argument.").await {
+                    Err(err) => {
+                        error!(
+                            "Error parsing reload argument: {} and replying to message {}: {}",
+                            e, msg.id.0, err
+                        );
+                        return Err(anyhow::anyhow!(
+                            "Error parsing reload argument: {} and replying to message {}: {}",
+                            e,
+                            msg.id.0,
+                            err
+                        )
+                        .into());
+                    }
+                    Ok(_) => {
+                        error!("Error parsing reload argument: {}.", e);
+                        return Err(anyhow::anyhow!("Error parsing reload argument: {}.", e).into());
+                    }
+                },
+                Ok(s) => Some(s),
+            }
+        };
+
+        let barrier = Arc::new(Barrier::new(2));
+        let send = COMMANDS
+            .get()
+            .expect("failed to read COMMANDS static")
+            .clone();
+        if let Err(e) = send
+            .send((Command::ReloadFeed(msg.clone(), id), barrier.clone()))
+            .await
+        {
+            error!("Failed to send on COMMANDS channel: {}", e);
+            match msg.reply(ctx, "Internal error").await {
                 Err(err) => {
                     error!(
-                        "Error parsing reload argument: {} and replying to message {}: {}",
+                        "Failed to send command: {} and reply to message {}: {}",
                         e, msg.id.0, err
                     );
                     return Err(anyhow::anyhow!(
-                        "Error parsing reload argument: {} and replying to message {}: {}",
+                        "Failed to send command: {} and reply to message {}: {}",
                         e,
                         msg.id.0,
                         err
@@ -551,47 +598,17 @@ pub async fn reload(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                     .into());
                 }
                 Ok(_) => {
-                    error!("Error parsing reload argument: {}.", e);
-                    return Err(anyhow::anyhow!("Error parsing reload argument: {}.", e).into());
+                    error!("Failed to send command: {}", e);
+                    return Err(anyhow::anyhow!("Failed to send command: {}", e).into());
                 }
-            },
-            Ok(s) => Some(s),
-        }
-    };
-
-    let barrier = Arc::new(Barrier::new(2));
-    let send = COMMANDS
-        .get()
-        .expect("failed to read COMMANDS static")
-        .clone();
-    if let Err(e) = send
-        .send((Command::ReloadFeed(msg.clone(), id), barrier.clone()))
-        .await
-    {
-        error!("Failed to send on COMMANDS channel: {}", e);
-        match msg.reply(ctx, "Internal error").await {
-            Err(err) => {
-                error!(
-                    "Failed to send command: {} and reply to message {}: {}",
-                    e, msg.id.0, err
-                );
-                return Err(anyhow::anyhow!(
-                    "Failed to send command: {} and reply to message {}: {}",
-                    e,
-                    msg.id.0,
-                    err
-                )
-                .into());
-            }
-            Ok(_) => {
-                error!("Failed to send command: {}", e);
-                return Err(anyhow::anyhow!("Failed to send command: {}", e).into());
             }
         }
-    }
 
-    barrier.wait().await;
-    Ok(())
+        barrier.wait().await;
+        Ok(())
+    })
+    .instrument(info_span!("~reload"))
+    .await
 }
 
 #[command]
@@ -599,63 +616,26 @@ pub async fn reload(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[usage("~import <opml file attached to message>")]
 #[num_args(0)]
 pub async fn import(ctx: &Context, msg: &Message) -> CommandResult {
-    info!("Recieved import command.");
+    (async {
+        let barrier = Arc::new(Barrier::new(2));
+        let send = COMMANDS
+            .get()
+            .expect("Failed to get COMMANDS static")
+            .clone();
 
-    let barrier = Arc::new(Barrier::new(2));
-    let send = COMMANDS
-        .get()
-        .expect("Failed to get COMMANDS static")
-        .clone();
-
-    if let Err(e) = send
-        .send((Command::Import(msg.clone()), barrier.clone()))
-        .await
-    {
-        error!("Failed to send on COMMANDS channel: {}", e);
-        match msg.reply(ctx, "Internal error").await {
-            Err(err) => {
-                error!(
-                    "Failed to send command: {} and reply to message {}: {}",
-                    e, msg.id.0, err
-                );
-                return Err(anyhow::anyhow!(
-                    "Failed to send command: {} and reply to message {}: {}",
-                    e,
-                    msg.id.0,
-                    err
-                )
-                .into());
-            }
-            Ok(_) => {
-                error!("Failed to send command: {}", e);
-                return Err(anyhow::anyhow!("Failed to send command: {}", e).into());
-            }
-        }
-    }
-
-    barrier.wait().await;
-    Ok(())
-}
-
-#[command]
-#[description("Export OPML feed list")]
-#[usage("~export [opml title]")]
-#[max_args(1)]
-pub async fn export(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    info!("Recieved export command.");
-
-    let title = if args.is_empty() {
-        None
-    } else {
-        match args.parse::<String>() {
-            Err(e) => match msg.reply(ctx, "Failed to parse argument.").await {
+        if let Err(e) = send
+            .send((Command::Import(msg.clone()), barrier.clone()))
+            .await
+        {
+            error!("Failed to send on COMMANDS channel: {}", e);
+            match msg.reply(ctx, "Internal error").await {
                 Err(err) => {
                     error!(
-                        "Error parsing export argument: {} and replying to message {}: {}",
+                        "Failed to send command: {} and reply to message {}: {}",
                         e, msg.id.0, err
                     );
                     return Err(anyhow::anyhow!(
-                        "Error parsing export argument: {} and replying to message {}: {}",
+                        "Failed to send command: {} and reply to message {}: {}",
                         e,
                         msg.id.0,
                         err
@@ -663,48 +643,89 @@ pub async fn export(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                     .into());
                 }
                 Ok(_) => {
-                    error!("Error parsing reload argument: {}.", e);
-                    return Err(anyhow::anyhow!("Error parsing export argument: {}.", e).into());
+                    error!("Failed to send command: {}", e);
+                    return Err(anyhow::anyhow!("Failed to send command: {}", e).into());
                 }
-            },
-            Ok(s) => Some(s),
-        }
-    };
-
-    let barrier = Arc::new(Barrier::new(2));
-    let send = COMMANDS
-        .get()
-        .expect("Failed to get COMMANDS static")
-        .clone();
-
-    if let Err(e) = send
-        .send((Command::Export(msg.clone(), title), barrier.clone()))
-        .await
-    {
-        error!("Failed to send on COMMANDS channel: {}", e);
-        match msg.reply(ctx, "Internal error").await {
-            Err(err) => {
-                error!(
-                    "Failed to send command: {} and reply to message {}: {}",
-                    e, msg.id.0, err
-                );
-                return Err(anyhow::anyhow!(
-                    "Failed to send command: {} and reply to message {}: {}",
-                    e,
-                    msg.id.0,
-                    err
-                )
-                .into());
-            }
-            Ok(_) => {
-                error!("Failed to send command: {}", e);
-                return Err(anyhow::anyhow!("Failed to send command: {}", e).into());
             }
         }
-    }
 
-    barrier.wait().await;
-    Ok(())
+        barrier.wait().await;
+        Ok(())
+    })
+    .instrument(info_span!("~import"))
+    .await
+}
+
+#[command]
+#[description("Export OPML feed list")]
+#[usage("~export [opml title]")]
+#[max_args(1)]
+pub async fn export(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    (async {
+        let title = if args.is_empty() {
+            None
+        } else {
+            match args.parse::<String>() {
+                Err(e) => match msg.reply(ctx, "Failed to parse argument.").await {
+                    Err(err) => {
+                        error!(
+                            "Error parsing export argument: {} and replying to message {}: {}",
+                            e, msg.id.0, err
+                        );
+                        return Err(anyhow::anyhow!(
+                            "Error parsing export argument: {} and replying to message {}: {}",
+                            e,
+                            msg.id.0,
+                            err
+                        )
+                        .into());
+                    }
+                    Ok(_) => {
+                        error!("Error parsing reload argument: {}.", e);
+                        return Err(anyhow::anyhow!("Error parsing export argument: {}.", e).into());
+                    }
+                },
+                Ok(s) => Some(s),
+            }
+        };
+
+        let barrier = Arc::new(Barrier::new(2));
+        let send = COMMANDS
+            .get()
+            .expect("Failed to get COMMANDS static")
+            .clone();
+
+        if let Err(e) = send
+            .send((Command::Export(msg.clone(), title), barrier.clone()))
+            .await
+        {
+            error!("Failed to send on COMMANDS channel: {}", e);
+            match msg.reply(ctx, "Internal error").await {
+                Err(err) => {
+                    error!(
+                        "Failed to send command: {} and reply to message {}: {}",
+                        e, msg.id.0, err
+                    );
+                    return Err(anyhow::anyhow!(
+                        "Failed to send command: {} and reply to message {}: {}",
+                        e,
+                        msg.id.0,
+                        err
+                    )
+                    .into());
+                }
+                Ok(_) => {
+                    error!("Failed to send command: {}", e);
+                    return Err(anyhow::anyhow!("Failed to send command: {}", e).into());
+                }
+            }
+        }
+
+        barrier.wait().await;
+        Ok(())
+    })
+    .instrument(info_span!("~export"))
+    .await
 }
 
 #[command]
@@ -712,66 +733,73 @@ pub async fn export(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[usage("~useragent [user agent]")]
 #[max_args(1)]
 pub async fn useragent(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    info!("Recieved useragent command.");
-    if args.remaining() == 0 {
-        let mut config = match CONFIG.read() {
-            Err(e) => return Err(anyhow::anyhow!("Failed to read CONFIG static {}", e).into()),
-            Ok(cfg) => cfg.clone(),
-        };
-
-        config.user_agent = None;
-        match CONFIG.write() {
-            Err(e) => return Err(anyhow::anyhow!("Failed to write CONFIG static {}", e).into()),
-            Ok(mut cfg) => cfg.user_agent = None,
-        }
-
-        info!("Cleared user agent.");
-        if let Err(e) = msg.reply(ctx, "Cleared user agent string.").await {
-            warn!("Failed to reply to message {}: {}", msg.id.0, e);
-        }
-
-        return config.save().map_err(|e| e.into());
-    }
-
-    match args.parse::<String>() {
-        Err(e) => match msg.reply(ctx, "Argument must be string.").await {
-            Err(err) => {
-                error!(
-                    "Failed to set new user agent string: {} and replying to message {}: {}",
-                    e, msg.id.0, err
-                );
-                Err(anyhow::anyhow!(
-                    "Failed to set user agent: {} and send error reply to message {}: {}",
-                    e,
-                    msg.id.0,
-                    err
-                )
-                .into())
-            }
-            Ok(_) => {
-                error!("Failed to set user agent: {}", e);
-                Err(anyhow::anyhow!("Failed to set user agent: {}", e).into())
-            }
-        },
-        Ok(user_agent) => {
+    (async {
+        if args.remaining() == 0 {
             let mut config = match CONFIG.read() {
                 Err(e) => return Err(anyhow::anyhow!("Failed to read CONFIG static {}", e).into()),
                 Ok(cfg) => cfg.clone(),
             };
 
-            config.user_agent = Some(user_agent.clone());
+            config.user_agent = None;
             match CONFIG.write() {
                 Err(e) => return Err(anyhow::anyhow!("Failed to write CONFIG static {}", e).into()),
-                Ok(mut cfg) => cfg.user_agent = Some(user_agent),
+                Ok(mut cfg) => cfg.user_agent = None,
             }
 
-            if let Err(e) = msg.reply(ctx, "User agent string set").await {
+            info!("Cleared user agent.");
+            if let Err(e) = msg.reply(ctx, "Cleared user agent string.").await {
                 warn!("Failed to reply to message {}: {}", msg.id.0, e);
             }
 
-            config.save().map_err(|e| e.into())
+            return config.save().map_err(|e| e.into());
         }
-    }
+
+        match args.parse::<String>() {
+            Err(e) => match msg.reply(ctx, "Argument must be string.").await {
+                Err(err) => {
+                    error!(
+                        "Failed to set new user agent string: {} and replying to message {}: {}",
+                        e, msg.id.0, err
+                    );
+                    Err(anyhow::anyhow!(
+                        "Failed to set user agent: {} and send error reply to message {}: {}",
+                        e,
+                        msg.id.0,
+                        err
+                    )
+                    .into())
+                }
+                Ok(_) => {
+                    error!("Failed to set user agent: {}", e);
+                    Err(anyhow::anyhow!("Failed to set user agent: {}", e).into())
+                }
+            },
+            Ok(user_agent) => {
+                let mut config = match CONFIG.read() {
+                    Err(e) => {
+                        return Err(anyhow::anyhow!("Failed to read CONFIG static {}", e).into())
+                    }
+                    Ok(cfg) => cfg.clone(),
+                };
+
+                config.user_agent = Some(user_agent.clone());
+                match CONFIG.write() {
+                    Err(e) => {
+                        return Err(anyhow::anyhow!("Failed to write CONFIG static {}", e).into())
+                    }
+                    Ok(mut cfg) => cfg.user_agent = Some(user_agent),
+                }
+
+                if let Err(e) = msg.reply(ctx, "User agent string set").await {
+                    warn!("Failed to reply to message {}: {}", msg.id.0, e);
+                }
+
+                config.save().map_err(|e| e.into())
+            }
+        }
+    })
+    .instrument(info_span!("~useragent"))
+    .await
 }
 
 #[command]
@@ -779,7 +807,7 @@ pub async fn useragent(ctx: &Context, msg: &Message, args: Args) -> CommandResul
 #[usage("~poll <seconds>")]
 #[num_args(1)]
 pub async fn poll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    info!("Recieved poll command.");
+    (async {
     match args.parse::<u64>() {
         Err(e) => {
             match msg
@@ -815,4 +843,5 @@ pub async fn poll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             config.save().map_err(|e| e.into())
         }
     }
+    }).instrument(info_span!("~poll")).await
 }

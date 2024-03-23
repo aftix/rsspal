@@ -1,17 +1,16 @@
-use std::collections::HashSet;
-use std::sync::{Arc, OnceLock};
-
-use log::{debug, error, info, warn};
-
-use serenity::model::prelude::*;
-use serenity::prelude::*;
-
-use tokio::runtime::Handle;
-use tokio::sync::{mpsc, Barrier};
-use tokio::task::JoinSet;
-use tokio::time::{sleep_until, Duration, Instant};
-
 use quick_xml::{de, se};
+use serenity::{model::prelude::*, prelude::*};
+use std::{
+    collections::HashSet,
+    sync::{Arc, OnceLock},
+};
+use tokio::{
+    runtime::Handle,
+    sync::{mpsc, Barrier},
+    task::JoinSet,
+    time::{sleep_until, Duration, Instant},
+};
+use tracing::{debug, error, info, info_span, instrument, warn, Instrument};
 
 use crate::discord;
 use crate::feed::{self, Feed};
@@ -41,7 +40,9 @@ pub struct EditArgs {
 }
 
 // Run in background, configuring server and updating feeds, etc
+#[instrument(skip(ctx))]
 pub async fn background_task(feeds: Vec<Feed>, ctx: Context) -> anyhow::Result<()> {
+    info!("Starting background task");
     let feeds = Arc::new(RwLock::new(feeds));
     let (sender, mut commands) = mpsc::channel(8);
     COMMANDS
@@ -73,7 +74,7 @@ pub async fn background_task(feeds: Vec<Feed>, ctx: Context) -> anyhow::Result<(
                         let feeds = feeds.clone();
                         let ctx = ctx.clone();
                         Handle::current().spawn(async move {
-                            let processed = process_command(cmd, &ctx, feeds).await;
+                            let processed = process_command(cmd, feeds, &ctx).await;
                             wait.wait().await;
                             if let Err(e) = spawned_sender.send(processed).await {
                                 error!("Failed to send processed command on channel: {}", e);
@@ -97,45 +98,90 @@ pub async fn background_task(feeds: Vec<Feed>, ctx: Context) -> anyhow::Result<(
     Ok(())
 }
 
+#[instrument(skip(feeds))]
 async fn remove_feed(idx: usize, feeds: impl AsRef<RwLock<Vec<Feed>>>) {
     let mut guard = feeds.as_ref().write().await;
     let feeds: &mut Vec<Feed> = guard.as_mut();
     feeds.remove(idx);
 }
 
-async fn add_feeds(new: Vec<Feed>, feeds: impl AsRef<RwLock<Vec<Feed>>>, ctx: &Context) {
-    discord::setup_channels(&new, ctx).await;
+#[instrument(skip(ctx))]
+async fn add_feed(idx: usize, feeds: Arc<RwLock<Vec<Feed>>>, ctx: Context) {
+    let feeds = feeds.read().await;
+    let feed = &feeds[idx];
 
-    let mut guard = feeds.as_ref().write().await;
-    let feeds: &mut Vec<Feed> = guard.as_mut();
-
-    let start = feeds.len();
-    feeds.extend(new.into_iter());
-
-    for feed in &feeds[start..] {
-        info!("Adding entries for feed {}", feed.title());
-        match &feed {
-            Feed::Rss(rss) => {
-                for item in &rss.channel.item {
-                    let publish = discord::publish_rss_item(&feed.title(), item, ctx).await;
-                    if let Err(e) = publish {
-                        warn!("failed to publish rss item to feed: {}", e);
+    let mut handles = JoinSet::new();
+    match feed {
+        Feed::Rss(rss) =>
+        {
+            #[allow(clippy::unnecessary_to_owned)]
+            for item in rss.channel.item.iter().cloned() {
+                let title = feed.title();
+                let ctx = ctx.clone();
+                let item_handle = async move {
+                    if let Err(e) = discord::publish_rss_item(&title, &item, &ctx).await {
+                        warn!("Failed to publish rss item to feed {title}: {e:?}");
                     }
-                }
+                };
+                handles.spawn(async move {
+                    item_handle
+                        .instrument(info_span!("add_feed::feed_future::rss_item"))
+                        .await;
+                });
             }
-            Feed::Atom(atom) => {
-                for entry in &atom.entry {
-                    let publish = discord::publish_atom_entry(&feed.title(), entry, ctx).await;
-                    if let Err(e) = publish {
-                        warn!("failed to publish atom item to feed: {}", e);
+        }
+        Feed::Atom(atom) =>
+        {
+            #[allow(clippy::unnecessary_to_owned)]
+            for entry in atom.entry.iter().cloned() {
+                let title = feed.title();
+                let ctx = ctx.clone();
+                let entry_handle = async move {
+                    if let Err(e) = discord::publish_atom_entry(&title, &entry, &ctx).await {
+                        warn!("Failed to publish atom entry to feed {title}: {e:?}");
                     }
-                }
+                };
+                handles.spawn(async move {
+                    entry_handle
+                        .instrument(info_span!("add_feed::feed_future::atom_entry"))
+                        .await;
+                });
             }
         }
     }
+
+    while handles.join_next().await.is_some() {}
 }
 
-async fn process_command(cmd: Command, ctx: &Context, feeds: Arc<RwLock<Vec<Feed>>>) -> Option<()> {
+#[instrument(skip(feeds, ctx))]
+async fn add_feeds(new: Vec<Feed>, feeds: Arc<RwLock<Vec<Feed>>>, ctx: &Context) {
+    discord::setup_channels(&new, ctx).await;
+
+    let (start, end) = {
+        let mut guard = feeds.write().await;
+        let feeds: &mut Vec<Feed> = guard.as_mut();
+
+        let start = feeds.len();
+        feeds.extend(new.into_iter());
+        (start, feeds.len())
+    };
+
+    let mut handles = JoinSet::new();
+    for idx in start..end {
+        let ctx = ctx.clone();
+        let feeds = feeds.clone();
+        handles.spawn(async move {
+            add_feed(idx, feeds.clone(), ctx)
+                .instrument(info_span!("add_feed"))
+                .await;
+        });
+    }
+
+    while handles.join_next().await.is_some() {}
+}
+
+#[instrument(skip(feeds, ctx))]
+async fn process_command(cmd: Command, feeds: Arc<RwLock<Vec<Feed>>>, ctx: &Context) -> Option<()> {
     match cmd {
         Command::AddFeed(feed) => {
             info!("Adding feed {}.", feed.title());
@@ -438,7 +484,7 @@ async fn process_command(cmd: Command, ctx: &Context, feeds: Arc<RwLock<Vec<Feed
                         .user_agent
                         .clone();
 
-                    match feed::from_url(feed.url(), Some(feed.title()), None, user_agent) {
+                    match feed::from_url(feed.url(), Some(feed.title()), None, user_agent).await {
                         Err(e) => {
                             warn!("Could not load feed from url {}: {}.", feed.url(), e);
                         }
@@ -466,6 +512,7 @@ async fn process_command(cmd: Command, ctx: &Context, feeds: Arc<RwLock<Vec<Feed
     None
 }
 
+#[instrument(skip(ctx))]
 async fn diff_feed(update: Feed, feeds: &mut [Feed], ctx: &Context) {
     let feed = feeds.iter_mut().find(|f| f.url() == update.url());
     if let Some(mut feed) = feed {
@@ -549,6 +596,7 @@ async fn diff_feed(update: Feed, feeds: &mut [Feed], ctx: &Context) {
     }
 }
 
+#[instrument(skip(ctx))]
 async fn update_feeds(feeds: &mut [Feed], force: bool, ctx: &Context) {
     info!("Updating feeds");
     let mut futures = JoinSet::new();
@@ -562,7 +610,7 @@ async fn update_feeds(feeds: &mut [Feed], force: bool, ctx: &Context) {
                     .expect("failed to get CONFIG static")
                     .user_agent
                     .clone();
-                feed::from_url(url, None, None, user_agent)
+                feed::from_url(url, None, None, user_agent).await
             });
         }
     }
@@ -580,6 +628,7 @@ async fn update_feeds(feeds: &mut [Feed], force: bool, ctx: &Context) {
     }
 }
 
+#[instrument]
 async fn exit_feeds_loop(feeds: &[Feed]) -> anyhow::Result<()> {
     debug!("Exiting the background loop");
 

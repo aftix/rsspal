@@ -1,20 +1,13 @@
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-
-use log::{debug, info};
-
-use serenity::builder::CreateEmbed;
-
-use tokio::runtime::Handle;
-use tokio::task::block_in_place;
-
 use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
-
-use serde::{Deserialize, Serialize};
-
 use quick_xml::de::from_reader;
-
 use reqwest::{self, Url};
+use serde::{Deserialize, Serialize};
+use serenity::builder::CreateEmbed;
+use std::{
+    fs::File,
+    io::{BufRead, BufReader},
+};
+use tracing::{debug, info_span, instrument, Instrument};
 
 // Atom Feed file
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]
@@ -143,6 +136,7 @@ impl Entry {
         }
     }
 
+    #[instrument(level = "debug")]
     pub fn to_embed(&self) -> impl Fn(&mut CreateEmbed) -> &mut CreateEmbed {
         let author = self.author.clone();
         let description = self.summary.clone();
@@ -227,36 +221,32 @@ impl AtomFeed {
     // Create a feed item from a URL to an RSS feed,
     // Filling the title and category fields if given
     // (title defaults to title from rss feed)
-    pub fn from_url(
+    #[instrument(level = "debug", skip(url, user_agent))]
+    pub async fn from_url(
         url: impl AsRef<str>,
         user_agent: Option<impl AsRef<str>>,
     ) -> anyhow::Result<Self> {
-        info!("Reading atom feed from {}", url.as_ref());
         let url: Url = Url::parse(url.as_ref())?;
         let feed_url = url.to_string();
 
         // Stream rss feed to the write end of the pipe in a new task
         let mut feed = if url.scheme() == "http" || url.scheme() == "https" {
-            debug!("Making network request for {}.", url);
-            let bytes = {
-                let url = url.clone();
-                block_in_place(move || {
-                    Handle::current().block_on(async move {
-                        let client = if let Some(user) = user_agent {
-                            reqwest::ClientBuilder::new()
-                                .user_agent(user.as_ref())
-                                .build()?
-                        } else {
-                            reqwest::ClientBuilder::new().build()?
-                        };
-                        let req = client.get(url.clone()).build()?;
-                        client.execute(req).await?.bytes().await
-                    })
-                })
-            }?;
+            let bytes = (async {
+                let client = if let Some(user) = user_agent {
+                    reqwest::ClientBuilder::new()
+                        .user_agent(user.as_ref())
+                        .build()?
+                } else {
+                    reqwest::ClientBuilder::new().build()?
+                };
+                let req = client.get(url.clone()).build()?;
+                client.execute(req).await?.bytes().await
+            })
+            .instrument(info_span!("AtomFeed::reqwest"))
+            .await?;
             xml_from_reader(url, BufReader::new(bytes.as_ref()))
         } else if url.scheme() == "file" {
-            debug!("Reading {} from disk.", url);
+            let _ = info_span!("AtomFeed::File");
             xml_from_reader(&feed_url, BufReader::new(File::open(url.path())?))
         } else {
             anyhow::bail!("{}: unsupported url schema", url)
@@ -267,6 +257,7 @@ impl AtomFeed {
     }
 
     // Use metadata on channel to figure out if it's time to update
+    #[instrument(level = "trace")]
     pub fn should_update(&self) -> bool {
         if let Some(last_update) = self.last_updated {
             let now = chrono::offset::Utc::now();
@@ -302,6 +293,7 @@ impl AtomFeed {
 mod test {
     use chrono::{DateTime, FixedOffset};
     use std::path::PathBuf;
+    use tokio::runtime;
 
     use super::{AtomFeed, Author, Entry, Link};
 
@@ -313,68 +305,86 @@ mod test {
 
     #[test]
     fn empty_file() {
-        let url = get_test_dir().join("empty.xml");
-        let feed = AtomFeed::from_url(
-            format!("file://{}", url.to_string_lossy()),
-            Option::<String>::None,
-        );
-        assert!(feed.is_err());
+        runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let url = get_test_dir().join("empty.xml");
+                let feed = AtomFeed::from_url(
+                    format!("file://{}", url.to_string_lossy()),
+                    Option::<String>::None,
+                )
+                .await;
+                assert!(feed.is_err());
+            });
     }
 
     #[test]
     fn full_file() {
-        let url = get_test_dir().join("atomfeed.xml");
-        let feed = AtomFeed::from_url(
-            format!("file://{}", url.to_string_lossy()),
-            Option::<String>::None,
-        );
-        assert!(feed.is_ok());
+        runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let url = get_test_dir().join("atomfeed.xml");
+                let feed = AtomFeed::from_url(
+                    format!("file://{}", url.to_string_lossy()),
+                    Option::<String>::None,
+                )
+                .await;
+                assert!(feed.is_ok());
 
-        let feed = feed.unwrap();
-        let expected_feed = AtomFeed {
-            id: "urn:uuid:60a76c80-d399-11d9-b93C-0003939e0af6".to_owned(),
-            title: "Example Feed".to_owned(),
-            updated: Some(
-                DateTime::<FixedOffset>::parse_from_rfc3339("2003-12-13T18:30:02Z")
-                    .unwrap()
-                    .into(),
-            ),
-            author: Some(Author {
-                name: "John Doe".to_owned(),
-                ..Default::default()
-            }),
-            link: vec![Link {
-                href: "http://example.org/".to_owned(),
-                ..Default::default()
-            }],
-            entry: vec![Entry {
-                id: "urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a".to_owned(),
-                title: "Atom-Powered Robots Run Amok".to_owned(),
-                updated: Some(
-                    DateTime::<FixedOffset>::parse_from_rfc3339("2003-12-13T18:30:02Z")
-                        .unwrap()
-                        .into(),
-                ),
-                summary: Some("Some text.".to_owned()),
-                link: vec![Link {
-                    href: "http://example.org/2003/12/13/atom03".to_owned(),
+                let feed = feed.unwrap();
+                let expected_feed = AtomFeed {
+                    id: "urn:uuid:60a76c80-d399-11d9-b93C-0003939e0af6".to_owned(),
+                    title: "Example Feed".to_owned(),
+                    updated: Some(
+                        DateTime::<FixedOffset>::parse_from_rfc3339("2003-12-13T18:30:02Z")
+                            .unwrap()
+                            .into(),
+                    ),
+                    author: Some(Author {
+                        name: "John Doe".to_owned(),
+                        ..Default::default()
+                    }),
+                    link: vec![Link {
+                        href: "http://example.org/".to_owned(),
+                        ..Default::default()
+                    }],
+                    entry: vec![Entry {
+                        id: "urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a".to_owned(),
+                        title: "Atom-Powered Robots Run Amok".to_owned(),
+                        updated: Some(
+                            DateTime::<FixedOffset>::parse_from_rfc3339("2003-12-13T18:30:02Z")
+                                .unwrap()
+                                .into(),
+                        ),
+                        summary: Some("Some text.".to_owned()),
+                        link: vec![Link {
+                            href: "http://example.org/2003/12/13/atom03".to_owned(),
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    }],
+                    url: format!("file://{}", url.to_string_lossy()),
                     ..Default::default()
-                }],
-                ..Default::default()
-            }],
-            url: format!("file://{}", url.to_string_lossy()),
-            ..Default::default()
-        };
-        assert_eq!(expected_feed, feed);
+                };
+                assert_eq!(expected_feed, feed);
+            });
     }
 
     #[test]
     fn youtube_feed() {
-        let url = get_test_dir().join("youtube_channel.xml");
-        let feed = AtomFeed::from_url(
-            format!("file://{}", url.to_string_lossy()),
-            Option::<String>::None,
-        );
-        assert!(feed.is_ok());
+        runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let url = get_test_dir().join("youtube_channel.xml");
+                let feed = AtomFeed::from_url(
+                    format!("file://{}", url.to_string_lossy()),
+                    Option::<String>::None,
+                )
+                .await;
+                assert!(feed.is_ok());
+            });
     }
 }

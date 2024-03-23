@@ -1,14 +1,8 @@
-use std::fs::File;
-
-use flate2::read::GzDecoder;
-use flate2::write::GzEncoder;
-use flate2::Compression;
-
-use log::{info, warn};
-
+use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use serde::{Deserialize, Serialize};
-
+use std::fs::File;
 use tokio::fs::try_exists;
+use tracing::{info, instrument, warn};
 
 pub mod atom;
 pub mod rss;
@@ -17,6 +11,7 @@ use crate::CONFIG;
 use atom::AtomFeed;
 use rss::RssFeed;
 
+#[instrument]
 pub async fn import() -> anyhow::Result<Vec<Feed>> {
     let db_path = match CONFIG.read() {
         Err(e) => anyhow::bail!("error reading CONFIG static: {}", e),
@@ -33,6 +28,7 @@ pub async fn import() -> anyhow::Result<Vec<Feed>> {
         .map_err(|e| anyhow::anyhow!("error reading JSON: {}", e))
 }
 
+#[instrument]
 pub async fn export(feeds: &[Feed]) -> anyhow::Result<()> {
     let db_path = match CONFIG.read() {
         Err(e) => anyhow::bail!("error reading CONFIG static: {}", e),
@@ -115,7 +111,8 @@ impl Default for Feed {
     }
 }
 
-pub fn from_url(
+#[instrument(skip(url))]
+pub async fn from_url(
     url: impl AsRef<str>,
     title: Option<String>,
     category: Option<String>,
@@ -123,9 +120,9 @@ pub fn from_url(
 ) -> anyhow::Result<Feed> {
     info!("Retrieving feed from url {}", url.as_ref());
 
-    let mut feed = match AtomFeed::from_url(&url, user_agent.clone()) {
+    let mut feed = match AtomFeed::from_url(&url, user_agent.clone()).await {
         Ok(f) => Ok(Feed::Atom(f)),
-        _ => RssFeed::from_url(&url, user_agent).map(Feed::Rss),
+        _ => RssFeed::from_url(&url, user_agent).await.map(Feed::Rss),
     }?;
 
     match &mut feed {
