@@ -7,8 +7,7 @@ use std::{
     fs::File,
     io::{BufRead, BufReader},
 };
-use tokio::{runtime::Handle, task::block_in_place};
-use tracing::{debug, info, instrument};
+use tracing::{debug, info_span, instrument, Instrument};
 
 // RSS Feed file
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq, Default)]
@@ -248,35 +247,31 @@ impl RssFeed {
     // Filling the title and category fields if given
     // (title defaults to title from rss feed)
     #[instrument(level = "debug", skip(url, user_agent))]
-    pub fn from_url(
+    pub async fn from_url(
         url: impl AsRef<str>,
         user_agent: Option<impl AsRef<str>>,
     ) -> anyhow::Result<Self> {
-        info!("Loading rss feed from {}.", url.as_ref());
         let url: Url = Url::parse(url.as_ref())?;
 
         // Stream rss feed to the write end of the pipe in a new task
         let mut feed = if url.scheme() == "http" || url.scheme() == "https" {
-            debug!("Making network request for {}.", url);
-            let bytes = {
-                let url = url.clone();
-                block_in_place(move || {
-                    Handle::current().block_on(async move {
-                        let client = if let Some(user) = user_agent {
-                            reqwest::ClientBuilder::new()
-                                .user_agent(user.as_ref())
-                                .build()?
-                        } else {
-                            reqwest::ClientBuilder::new().build()?
-                        };
-                        let req = client.get(url.clone()).build()?;
-                        client.execute(req).await?.bytes().await
-                    })
-                })
-            }?;
+            let bytes = (async {
+                let client = if let Some(user) = user_agent {
+                    reqwest::ClientBuilder::new()
+                        .user_agent(user.as_ref())
+                        .build()?
+                } else {
+                    reqwest::ClientBuilder::new().build()?
+                };
+                let req = client.get(url.clone()).build()?;
+                client.execute(req).await?.bytes().await
+            })
+            .instrument(info_span!("RssFeed::reqwest"))
+            .await?;
+
             xml_from_reader(url.as_str(), BufReader::new(bytes.as_ref()))
         } else if url.scheme() == "file" {
-            debug!("Reading {} from disk.", url);
+            let _ = info_span!("RssFeed::File");
             let path = url.path();
             let file = File::open(path)?;
             xml_from_reader(url.as_str(), BufReader::new(file))
@@ -329,6 +324,8 @@ impl RssFeed {
 mod test {
     use std::path::PathBuf;
 
+    use tokio::runtime;
+
     use super::rfc822::into_datetime;
 
     #[allow(unused_imports)]
@@ -342,89 +339,100 @@ mod test {
 
     #[test]
     fn empty_file() {
-        let url = get_test_dir().join("empty.xml");
-        let feed = RssFeed::from_url(
-            format!("file://{}", url.to_string_lossy()),
-            Option::<String>::None,
-        );
-        assert!(feed.is_err());
+        runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let url = get_test_dir().join("empty.xml");
+                let feed = RssFeed::from_url(
+                    format!("file://{}", url.to_string_lossy()),
+                    Option::<String>::None,
+                )
+                .await;
+                assert!(feed.is_err());
+            });
     }
 
     #[test]
     fn full_file() {
-        let url = get_test_dir().join("rssboard.xml");
-        let feed = RssFeed::from_url(
-            format!("file://{}", url.to_string_lossy()),
-            Option::<String>::None,
-        );
-        assert!(feed.is_ok());
-        let feed = feed.unwrap();
+        runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let url = get_test_dir().join("rssboard.xml");
+                let feed = RssFeed::from_url(
+                    format!("file://{}", url.to_string_lossy()),
+                    Option::<String>::None,
+                ).await;
+                assert!(feed.is_ok());
+                let feed = feed.unwrap();
 
-        let expected_feed = RssFeed {
-            channel: RssChannel {
-                title: "NASA Space Station News".to_string(),
-                link: String::default(),
-                url: format!("file://{}", url.to_string_lossy()),
-                description: "A RSS news feed containing the latest NASA press releases on the International Space Station.".to_string(),
-                pub_date: Some(into_datetime("Tue, 10 Jun 2003 04:00:00 +0000").unwrap()),
-                docs: Some("https://www.rssboard.org/rss-specification".to_owned()),
-                managing_editor: Some("neil.armstrong@example.com (Neil Armstrong)".to_owned()),
-                web_master: Some("sally.ride@example.com (Sally Ride)".to_owned()),
-                item: vec![
-                    RssItem {
-                        title: Some("Louisiana Students to Hear from NASA Astronauts Aboard Space Station".to_owned()),
-                        link: "http://www.nasa.gov/press-release/louisiana-students-to-hear-from-nasa-astronauts-aboard-space-station".to_owned(),
-                        description: "As part of the state's first Earth-to-space call, students from Louisiana will have an opportunity soon to hear from NASA astronauts aboard the International Space Station.".to_owned(),
-                        date: Some(into_datetime("Fri, 21 Jul 2023 09:04 -0400").unwrap()),
-                        guid: Some("http://www.nasa.gov/press-release/louisiana-students-to-hear-from-nasa-astronauts-aboard-space-station".to_owned()),
+                let expected_feed = RssFeed {
+                    channel: RssChannel {
+                        title: "NASA Space Station News".to_string(),
+                        link: String::default(),
+                        url: format!("file://{}", url.to_string_lossy()),
+                        description: "A RSS news feed containing the latest NASA press releases on the International Space Station.".to_string(),
+                        pub_date: Some(into_datetime("Tue, 10 Jun 2003 04:00:00 +0000").unwrap()),
+                        docs: Some("https://www.rssboard.org/rss-specification".to_owned()),
+                        managing_editor: Some("neil.armstrong@example.com (Neil Armstrong)".to_owned()),
+                        web_master: Some("sally.ride@example.com (Sally Ride)".to_owned()),
+                        item: vec![
+                            RssItem {
+                                title: Some("Louisiana Students to Hear from NASA Astronauts Aboard Space Station".to_owned()),
+                                link: "http://www.nasa.gov/press-release/louisiana-students-to-hear-from-nasa-astronauts-aboard-space-station".to_owned(),
+                                description: "As part of the state's first Earth-to-space call, students from Louisiana will have an opportunity soon to hear from NASA astronauts aboard the International Space Station.".to_owned(),
+                                date: Some(into_datetime("Fri, 21 Jul 2023 09:04 -0400").unwrap()),
+                                guid: Some("http://www.nasa.gov/press-release/louisiana-students-to-hear-from-nasa-astronauts-aboard-space-station".to_owned()),
+                                ..Default::default()
+                            },
+                            RssItem {
+                                title: None,
+                                link: "http://www.nasa.gov/press-release/nasa-awards-integrated-mission-operations-contract-iii".to_owned(),
+                                description: "NASA has selected KBR Wyle Services, LLC, of Fulton, Maryland, to provide mission and flight crew operations support for the International Space Station and future human space exploration.".to_owned(),
+                                date: Some(into_datetime("Thu, 20 Jul 2023 15:05 -0400").unwrap()),
+                                guid: Some("http://www.nasa.gov/press-release/nasa-awards-integrated-mission-operations-contract-iii".to_owned()),
+                                ..Default::default()
+                            },
+                            RssItem {
+                                title: Some("NASA Expands Options for Spacewalking, Moonwalking Suits".to_owned()),
+                                link: "http://www.nasa.gov/press-release/nasa-expands-options-for-spacewalking-moonwalking-suits-services".to_owned(),
+                                description: "NASA has awarded Axiom Space and Collins Aerospace task orders under existing contracts to advance spacewalking capabilities in low Earth orbit, as well as moonwalking services for Artemis missions.".to_owned(),
+                                date: Some(into_datetime("Mon, 10 Jul 2023 14:14 -0400").unwrap()),
+                                guid: Some("http://www.nasa.gov/press-release/nasa-expands-options-for-spacewalking-moonwalking-suits-services".to_owned()),
+                                enclosure: Some(Enclosure {
+                                    url: "http://www.nasa.gov/sites/default/files/styles/1x1_cardfeed/public/thumbnails/image/iss068e027836orig.jpg?itok=ucNUaaGx".to_owned(),
+                                    length: 1032272,
+                                    content_type: "image/jpeg".to_owned(),
+                                }),
+                                ..Default::default()
+                            },
+                            RssItem {
+                                title: Some("NASA to Provide Coverage as Dragon Departs Station".to_owned()),
+                                link: "http://www.nasa.gov/press-release/nasa-to-provide-coverage-as-dragon-departs-station-with-science".to_owned(),
+                                description: "NASA is set to receive scientific research samples and hardware as a SpaceX Dragon cargo resupply spacecraft departs the International Space Station on Thursday, June 29.".to_owned(),
+                                date: Some(into_datetime("Tue, 20 May 2003 08:56:02 +0000").unwrap()),
+                                guid: Some("http://www.nasa.gov/press-release/nasa-to-provide-coverage-as-dragon-departs-station-with-science".to_owned()),
+                                ..Default::default()
+                            },
+                            RssItem {
+                                title: Some("NASA Plans Coverage of Roscosmos Spacewalk Outside Space Station".to_owned()),
+                                link: "http://liftoff.msfc.nasa.gov/news/2003/news-laundry.asp".to_owned(),
+                                description: "Compared to earlier spacecraft, the International Space Station has many luxuries, but laundry facilities are not one of them.  Instead, astronauts have other options.".to_owned(),
+                                date: Some(into_datetime("Mon, 26 Jun 2023 12:45 -0400").unwrap()),
+                                guid: Some("http://liftoff.msfc.nasa.gov/2003/05/20.html#item570".to_owned()),
+                                enclosure: Some(Enclosure {
+                                    url: "http://www.nasa.gov/sites/default/files/styles/1x1_cardfeed/public/thumbnails/image/spacex_dragon_june_29.jpg?itok=nIYlBLme".to_owned(),
+                                    length: 269866,
+                                    content_type: "image/jpeg".to_owned(),
+                                }),
+                                ..Default::default()
+                            },
+                        ],
                         ..Default::default()
                     },
-                    RssItem {
-                        title: None,
-                        link: "http://www.nasa.gov/press-release/nasa-awards-integrated-mission-operations-contract-iii".to_owned(),
-                        description: "NASA has selected KBR Wyle Services, LLC, of Fulton, Maryland, to provide mission and flight crew operations support for the International Space Station and future human space exploration.".to_owned(),
-                        date: Some(into_datetime("Thu, 20 Jul 2023 15:05 -0400").unwrap()),
-                        guid: Some("http://www.nasa.gov/press-release/nasa-awards-integrated-mission-operations-contract-iii".to_owned()),
-                        ..Default::default()
-                    },
-                    RssItem {
-                        title: Some("NASA Expands Options for Spacewalking, Moonwalking Suits".to_owned()),
-                        link: "http://www.nasa.gov/press-release/nasa-expands-options-for-spacewalking-moonwalking-suits-services".to_owned(),
-                        description: "NASA has awarded Axiom Space and Collins Aerospace task orders under existing contracts to advance spacewalking capabilities in low Earth orbit, as well as moonwalking services for Artemis missions.".to_owned(),
-                        date: Some(into_datetime("Mon, 10 Jul 2023 14:14 -0400").unwrap()),
-                        guid: Some("http://www.nasa.gov/press-release/nasa-expands-options-for-spacewalking-moonwalking-suits-services".to_owned()),
-                        enclosure: Some(Enclosure {
-                            url: "http://www.nasa.gov/sites/default/files/styles/1x1_cardfeed/public/thumbnails/image/iss068e027836orig.jpg?itok=ucNUaaGx".to_owned(),
-                            length: 1032272,
-                            content_type: "image/jpeg".to_owned(),
-                        }),
-                        ..Default::default()
-                    },
-                    RssItem {
-                        title: Some("NASA to Provide Coverage as Dragon Departs Station".to_owned()),
-                        link: "http://www.nasa.gov/press-release/nasa-to-provide-coverage-as-dragon-departs-station-with-science".to_owned(),
-                        description: "NASA is set to receive scientific research samples and hardware as a SpaceX Dragon cargo resupply spacecraft departs the International Space Station on Thursday, June 29.".to_owned(),
-                        date: Some(into_datetime("Tue, 20 May 2003 08:56:02 +0000").unwrap()),
-                        guid: Some("http://www.nasa.gov/press-release/nasa-to-provide-coverage-as-dragon-departs-station-with-science".to_owned()),
-                        ..Default::default()
-                    },
-                    RssItem {
-                        title: Some("NASA Plans Coverage of Roscosmos Spacewalk Outside Space Station".to_owned()),
-                        link: "http://liftoff.msfc.nasa.gov/news/2003/news-laundry.asp".to_owned(),
-                        description: "Compared to earlier spacecraft, the International Space Station has many luxuries, but laundry facilities are not one of them.  Instead, astronauts have other options.".to_owned(),
-                        date: Some(into_datetime("Mon, 26 Jun 2023 12:45 -0400").unwrap()),
-                        guid: Some("http://liftoff.msfc.nasa.gov/2003/05/20.html#item570".to_owned()),
-                        enclosure: Some(Enclosure {
-                            url: "http://www.nasa.gov/sites/default/files/styles/1x1_cardfeed/public/thumbnails/image/spacex_dragon_june_29.jpg?itok=nIYlBLme".to_owned(),
-                            length: 269866,
-                            content_type: "image/jpeg".to_owned(),
-                        }),
-                        ..Default::default()
-                    },
-                ],
-                ..Default::default()
-            },
-        };
-        assert_eq!(expected_feed, feed);
+                };
+                assert_eq!(expected_feed, feed);
+            });
     }
 }

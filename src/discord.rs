@@ -365,7 +365,6 @@ pub async fn publish_rss_item(
 
 #[instrument(skip(ctx))]
 pub async fn setup_channels(feeds: &[Feed], ctx: &Context) {
-    info!("Setting up discord servers to fit read roles.");
     let guilds = {
         if let Some(g) = GUILDS.get() {
             g.clone()

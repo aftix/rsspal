@@ -112,7 +112,7 @@ impl Default for Feed {
 }
 
 #[instrument(skip(url))]
-pub fn from_url(
+pub async fn from_url(
     url: impl AsRef<str>,
     title: Option<String>,
     category: Option<String>,
@@ -120,9 +120,9 @@ pub fn from_url(
 ) -> anyhow::Result<Feed> {
     info!("Retrieving feed from url {}", url.as_ref());
 
-    let mut feed = match AtomFeed::from_url(&url, user_agent.clone()) {
+    let mut feed = match AtomFeed::from_url(&url, user_agent.clone()).await {
         Ok(f) => Ok(Feed::Atom(f)),
-        _ => RssFeed::from_url(&url, user_agent).map(Feed::Rss),
+        _ => RssFeed::from_url(&url, user_agent).await.map(Feed::Rss),
     }?;
 
     match &mut feed {

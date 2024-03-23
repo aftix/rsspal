@@ -18,7 +18,7 @@ lazy_static! {
 }
 
 // Read the configuration, parse variables, and start discord client
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
     signal::mask_signals().map_err(|e| anyhow::anyhow!("SIG_UNBLOCK sigprocmask errno: {}", e))?;
 

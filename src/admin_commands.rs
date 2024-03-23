@@ -50,7 +50,6 @@ impl EventHandler for Handler {
     // Real main function since everything needs access to the context
     #[instrument(skip(ctx))]
     async fn ready(&self, ctx: Context, ready: Ready) {
-        debug!("serenity discord client is ready");
         let ids: Vec<_> = ready.guilds.iter().map(|guild| guild.id).collect();
         GUILDS
             .set(ids)
@@ -61,11 +60,11 @@ impl EventHandler for Handler {
 
         // Get the stored database
         let feeds = feed::import().await.expect("Failed to import feeds.");
-
+        let handle = spawn(
+            background_task(feeds.clone(), ctx.clone()).instrument(info_span!("background_task")),
+        );
+        drop(handle);
         discord::setup_channels(&feeds, &ctx).await;
-
-        debug!("spawning background task");
-        spawn(background_task(feeds, ctx.clone()));
 
         ctx.online().await;
         info!("{} is ready.", ready.user.name);
@@ -268,7 +267,7 @@ pub async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
             .user_agent
             .clone();
 
-        match feed::from_url(&url, title, None, user_agent) {
+        match feed::from_url(&url, title, None, user_agent).await {
             Err(e) => {
                 match msg
                     .reply(ctx, &format!("Failed to load feed from {}: {}", url, e))
