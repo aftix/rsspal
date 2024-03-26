@@ -29,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
                 .pretty()
                 .with_filter(EnvFilter::from_default_env()),
         )
-        .with(tracing_journald::layer()?)
+        .with(tracing_journald::layer()?.with_filter(EnvFilter::from_default_env()))
         .with(console_layer)
         .init();
 
